@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Teal background matching the Flutter splash screen gradient start color -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0DB8A9"/>
+        </shape>
+    </item>
+</layer-list>
