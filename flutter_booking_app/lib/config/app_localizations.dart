@@ -19,7 +19,7 @@ class AppLocalizations {
   bool get isFrench  => locale.languageCode == 'fr';
 
   // ── All strings ────────────────────────────────────────────────
-  String get appName => 'HayaBook';
+  String get appName => 'Mawidi';
 
   // ── Bottom Nav ─────────────────────────────────────────────────
   String get navHome      => _t('Home',       'Accueil',     'الرئيسية');

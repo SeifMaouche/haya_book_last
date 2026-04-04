@@ -5,13 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/app_localizations.dart';
 
-// ─── Purple brand colours (replaces all teal/orange/amber) ───────────────────
-const _kPrimaryDark  = Color(0xFF2E1065); // bgDarkPurple — darkest bg
-const _kPrimary      = Color(0xFF7C3AED); // primary
-const _kPrimaryLight = Color(0xFF8B5CF6); // gradientTop
-const _kBlob         = Color(0xFFA78BFA); // blobColor
-const _kAccent       = Color(0xFFEC4899); // secondary (hot pink — replaces orange)
-const _kAccentDark   = Color(0xFFBE185D); // deeper pink — replaces amber
+const _kPrimaryDark  = Color(0xFF2E1065);
+const _kPrimary      = Color(0xFF7C3AED);
+const _kPrimaryLight = Color(0xFF8B5CF6);
+const _kBlob         = Color(0xFFA78BFA);
+const _kAccent       = Color(0xFFEC4899);
+const _kAccentDark   = Color(0xFFBE185D);
 
 class WelcomeOnboardingScreen extends StatefulWidget {
   const WelcomeOnboardingScreen({Key? key}) : super(key: key);
@@ -37,23 +36,23 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
       title:      'Find Providers\nNear You',
       subtitle:   'Connect instantly with top-rated professionals in your neighborhood with our advanced geolocation booking.',
       topBtnIcon: Icons.close,
-      topLabel:   'HayaBook',
+      topLabel:   'Mawidi',
       dotActive:  Colors.white,
     ),
     _PageData(
       type:       PageType.calendar,
       title:      'Book in\nSeconds',
-      subtitle:   "Experience the future of booking with HayaBook's ultimate glass interface.",
+      subtitle:   "Experience the future of booking with Mawidi's ultimate glass interface.",
       topBtnIcon: Icons.chevron_left,
-      topLabel:   'HAYABOOK',
+      topLabel:   'Mawidi',
       dotActive:  _kAccent,
     ),
     _PageData(
       type:       PageType.confirm,
       title:      'Get Confirmed\nInstantly',
-      subtitle:   'Experience seamless validation and instant access to your HayaBook features with our high-end glass technology.',
+      subtitle:   'Experience seamless validation and instant access to your Mawidi features with our high-end glass technology.',
       topBtnIcon: Icons.arrow_back,
-      topLabel:   'HayaBook',
+      topLabel:   'Mawidi',
       dotActive:  Colors.white,
     ),
   ];
@@ -91,8 +90,6 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
       _pageCtrl.nextPage(
           duration: const Duration(milliseconds: 380),
           curve: Curves.easeInOut);
-    } else {
-      Navigator.pushReplacementNamed(context, '/signup');
     }
   }
 
@@ -108,6 +105,16 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
     setState(() => _page = i);
     _enterCtrl.reset();
     _enterCtrl.forward();
+  }
+
+  // ✅ Navigate to dedicated client route — role baked in, never wrong
+  void _goClientSignup() {
+    Navigator.pushNamed(context, '/signup/client');
+  }
+
+  // ✅ Navigate to dedicated provider route — role baked in, never wrong
+  void _goProviderSignup() {
+    Navigator.pushNamed(context, '/signup/provider');
   }
 
   @override
@@ -131,8 +138,7 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
                   _TopBar(
                     page:     _page,
                     pageData: data,
-                    onClose: () =>
-                        Navigator.pushReplacementNamed(context, '/signup'),
+                    onClose: _goClientSignup,
                     onBack: _goPrev,
                   ),
                   Expanded(
@@ -155,10 +161,12 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
                     ),
                   ),
                   _BottomSection(
-                    page:     _page,
-                    count:    _pages.length,
-                    pageData: data,
-                    onNext:   _goNext,
+                    page:             _page,
+                    count:            _pages.length,
+                    pageData:         data,
+                    onNext:           _goNext,
+                    onClientSignup:   _goClientSignup,
+                    onProviderSignup: _goProviderSignup,
                   ),
                 ],
               ),
@@ -170,9 +178,7 @@ class _WelcomeOnboardingScreenState extends State<WelcomeOnboardingScreen>
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// BACKGROUND — purple gradient + blobs
-// ══════════════════════════════════════════════════════════════
+// ── Background ────────────────────────────────────────────────────
 class _Background extends StatelessWidget {
   final int page;
   const _Background({required this.page});
@@ -198,10 +204,8 @@ class _Background extends StatelessWidget {
         if (page == 0)
           Positioned(
             bottom: -60, right: -60,
-            child: _SoftBlob(
-              size:  280,
-              color: _kAccent.withOpacity(0.18),
-            ),
+            child: _SoftBlob(size: 280,
+                color: _kAccent.withOpacity(0.18)),
           ),
       ],
     );
@@ -236,9 +240,7 @@ class _OrganicTexturePainter extends CustomPainter {
   bool shouldRepaint(_) => false;
 }
 
-// ══════════════════════════════════════════════════════════════
-// TOP BAR
-// ══════════════════════════════════════════════════════════════
+// ── Top Bar ───────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   final int        page;
   final _PageData  pageData;
@@ -287,9 +289,7 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// PAGE CONTENT
-// ══════════════════════════════════════════════════════════════
+// ── Page Content ──────────────────────────────────────────────────
 class _PageContent extends StatelessWidget {
   final _PageData data;
   final int       pageIndex;
@@ -305,7 +305,7 @@ class _PageContent extends StatelessWidget {
   }
 }
 
-// ── Page 0 ────────────────────────────────────────────────────
+// ── Page 0 ────────────────────────────────────────────────────────
 class _Page0Medical extends StatelessWidget {
   final _PageData data;
   const _Page0Medical({required this.data});
@@ -324,7 +324,6 @@ class _Page0Medical extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 _GlassRing(outerDia: 280, innerDia: 220),
-                // Purple radial circle — replaces amber
                 Container(
                   width: 220, height: 220,
                   decoration: const BoxDecoration(
@@ -334,26 +333,18 @@ class _Page0Medical extends StatelessWidget {
                       center: Alignment(-0.3, -0.3),
                     ),
                   ),
-                  child: const Icon(
-                    Icons.medical_services_rounded,
-                    color: Colors.white,
-                    size:  90,
-                  ),
+                  child: const Icon(Icons.medical_services_rounded,
+                      color: Colors.white, size: 90),
                 ),
                 Positioned(
                   right: 10, bottom: 30,
                   child: Transform.rotate(
                     angle: 0.08,
                     child: _GlassRoundedRect(
-                      width: 72, height: 72,
-                      radius: 18,
-                      tintOpacity: 0.18,
-                      blurSigma:   14,
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: Colors.white,
-                        size:  32,
-                      ),
+                      width: 72, height: 72, radius: 18,
+                      tintOpacity: 0.18, blurSigma: 14,
+                      child: const Icon(Icons.location_on_rounded,
+                          color: Colors.white, size: 32),
                     ),
                   ),
                 ),
@@ -369,7 +360,7 @@ class _Page0Medical extends StatelessWidget {
   }
 }
 
-// ── Page 1 ────────────────────────────────────────────────────
+// ── Page 1 ────────────────────────────────────────────────────────
 class _Page1Calendar extends StatelessWidget {
   final _PageData data;
   const _Page1Calendar({required this.data});
@@ -384,50 +375,36 @@ class _Page1Calendar extends StatelessWidget {
           Expanded(
             flex: 5,
             child: _GlassRoundedRect(
-              width:       double.infinity,
-              height:      double.infinity,
-              radius:      32,
-              tintOpacity: 0.13,
-              blurSigma:   20,
+              width: double.infinity, height: double.infinity,
+              radius: 32, tintOpacity: 0.13, blurSigma: 20,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  Positioned(
-                    top: 28, right: 36,
-                    child: _SmallGlassCircle(size: 48),
-                  ),
-                  Positioned(
-                    bottom: 44, left: 44,
-                    child: _SmallGlassCircle(size: 34),
-                  ),
+                  Positioned(top: 28, right: 36,
+                      child: _SmallGlassCircle(size: 48)),
+                  Positioned(bottom: 44, left: 44,
+                      child: _SmallGlassCircle(size: 34)),
                   _GlassRing(outerDia: 200, innerDia: 156),
-                  // White card — calendar icon with pink/accent underline
                   Container(
-                    width:  130, height: 130,
+                    width: 130, height: 130,
                     decoration: BoxDecoration(
-                      color:         Colors.white.withOpacity(0.92),
-                      borderRadius:  BorderRadius.circular(28),
+                      color: Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(28),
                       boxShadow: [
-                        BoxShadow(
-                          color:      Colors.black.withOpacity(0.10),
-                          blurRadius: 22,
-                          offset:     const Offset(0, 6),
-                        ),
+                        BoxShadow(color: Colors.black.withOpacity(0.10),
+                            blurRadius: 22, offset: const Offset(0, 6)),
                       ],
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
-                          Icons.calendar_today_rounded,
-                          color: _kAccent, // pink replaces orange
-                          size:  56,
-                        ),
+                        const Icon(Icons.calendar_today_rounded,
+                            color: _kAccent, size: 56),
                         const SizedBox(height: 8),
                         Container(
-                          width:  36, height: 3,
+                          width: 36, height: 3,
                           decoration: BoxDecoration(
-                            color:        _kAccent.withOpacity(0.35),
+                            color: _kAccent.withOpacity(0.35),
                             borderRadius: BorderRadius.circular(99),
                           ),
                         ),
@@ -447,7 +424,7 @@ class _Page1Calendar extends StatelessWidget {
   }
 }
 
-// ── Page 2 ────────────────────────────────────────────────────
+// ── Page 2 ────────────────────────────────────────────────────────
 class _Page2Confirm extends StatelessWidget {
   final _PageData data;
   const _Page2Confirm({required this.data});
@@ -463,66 +440,47 @@ class _Page2Confirm extends StatelessWidget {
           Expanded(
             flex: 4,
             child: _GlassRoundedRect(
-              width:       double.infinity,
-              height:      double.infinity,
-              radius:      28,
-              tintOpacity: 0.13,
-              blurSigma:   18,
+              width: double.infinity, height: double.infinity,
+              radius: 28, tintOpacity: 0.13, blurSigma: 18,
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Outer white circle
                   Container(
                     width: 190, height: 190,
                     decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
+                        shape: BoxShape.circle, color: Colors.white),
                   ),
-                  // Mid lavender ring — replaces teal tint
                   Container(
                     width: 160, height: 160,
                     decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFFDDD6FE), // lavenderLight
-                    ),
+                        shape: BoxShape.circle,
+                        color: Color(0xFFDDD6FE)),
                   ),
-                  // Inner purple circle with checkmark
                   Container(
                     width: 100, height: 100,
                     decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _kPrimary,
-                    ),
-                    child: const Icon(
-                      Icons.check_rounded,
-                      color: Colors.white,
-                      size:  50,
-                    ),
+                        shape: BoxShape.circle, color: _kPrimary),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.white, size: 50),
                   ),
                   Positioned(
                     top: 32, right: 40,
                     child: Transform.rotate(
                       angle: 0.10,
                       child: _GlassRoundedRect(
-                        width: 52, height: 52,
-                        radius:      14,
-                        tintOpacity: 0.22,
-                        blurSigma:   12,
-                        child: const Icon(
-                          Icons.verified_user_rounded,
-                          color: Colors.white,
-                          size:  24,
-                        ),
+                        width: 52, height: 52, radius: 14,
+                        tintOpacity: 0.22, blurSigma: 12,
+                        child: const Icon(Icons.verified_user_rounded,
+                            color: Colors.white, size: 24),
                       ),
                     ),
                   ),
                   Positioned(
                     bottom: 20,
                     child: Container(
-                      width:  60, height: 4,
+                      width: 60, height: 4,
                       decoration: BoxDecoration(
-                        color:        Colors.white.withOpacity(0.35),
+                        color: Colors.white.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(99),
                       ),
                     ),
@@ -536,12 +494,8 @@ class _Page2Confirm extends StatelessWidget {
             data.title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontFamily:    'Inter',
-              fontSize:      34,
-              fontWeight:    FontWeight.w800,
-              color:         Colors.white,
-              letterSpacing: -0.5,
-              height:        1.18,
+              fontFamily: 'Inter', fontSize: 34, fontWeight: FontWeight.w800,
+              color: Colors.white, letterSpacing: -0.5, height: 1.18,
             ),
           ),
           const SizedBox(height: 14),
@@ -551,10 +505,8 @@ class _Page2Confirm extends StatelessWidget {
               data.subtitle,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize:   16,
-                color:      Colors.white.withOpacity(0.88),
-                height:     1.55,
+                fontFamily: 'Inter', fontSize: 16,
+                color: Colors.white.withOpacity(0.88), height: 1.55,
               ),
             ),
           ),
@@ -565,20 +517,22 @@ class _Page2Confirm extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// BOTTOM SECTION
-// ══════════════════════════════════════════════════════════════
+// ── Bottom Section ────────────────────────────────────────────────
 class _BottomSection extends StatelessWidget {
   final int        page;
   final int        count;
   final _PageData  pageData;
   final VoidCallback onNext;
+  final VoidCallback onClientSignup;
+  final VoidCallback onProviderSignup;
 
   const _BottomSection({
     required this.page,
     required this.count,
     required this.pageData,
     required this.onNext,
+    required this.onClientSignup,
+    required this.onProviderSignup,
   });
 
   @override
@@ -590,6 +544,7 @@ class _BottomSection extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Dot indicators
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(count, (i) {
@@ -605,52 +560,162 @@ class _BottomSection extends StatelessWidget {
                       ? pageData.dotActive
                       : Colors.white.withOpacity(0.35),
                   borderRadius: BorderRadius.circular(99),
-                  boxShadow: (active && pageData.dotActive == _kAccent)
-                      ? [BoxShadow(
-                    color:        _kAccent.withOpacity(0.55),
-                    blurRadius:   10,
-                    spreadRadius: 1,
-                  )]
+                  boxShadow:
+                  (active && pageData.dotActive == _kAccent)
+                      ? [BoxShadow(color: _kAccent.withOpacity(0.55),
+                      blurRadius: 10, spreadRadius: 1)]
                       : null,
                 ),
               );
             }),
           ),
           const SizedBox(height: 28),
-          if (isLast)
-            _GetStartedButton(onTap: onNext)
-          else
-            Column(
-              children: [
-                _ArrowCircleButton(onTap: onNext, page: page),
-                const SizedBox(height: 12),
-                Text(
-                  'NEXT STEP',
-                  style: TextStyle(
-                    fontFamily:    'Inter',
-                    fontSize:      10,
-                    fontWeight:    FontWeight.w600,
-                    color:         Colors.white.withOpacity(0.52),
-                    letterSpacing: 2.2,
-                  ),
-                ),
-              ],
+
+          if (isLast) ...[
+            _DualCtaButtons(
+              onClientTap:   onClientSignup,
+              onProviderTap: onProviderSignup,
             ),
+          ] else ...[
+            _ArrowCircleButton(onTap: onNext, page: page),
+            const SizedBox(height: 12),
+            Text(
+              'NEXT STEP',
+              style: TextStyle(
+                fontFamily: 'Inter', fontSize: 10, fontWeight: FontWeight.w600,
+                color: Colors.white.withOpacity(0.52), letterSpacing: 2.2,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// ATOM WIDGETS
-// ══════════════════════════════════════════════════════════════
+// ── Dual CTA Buttons ──────────────────────────────────────────────
+class _DualCtaButtons extends StatelessWidget {
+  final VoidCallback onClientTap;
+  final VoidCallback onProviderTap;
 
+  const _DualCtaButtons({
+    required this.onClientTap,
+    required this.onProviderTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Primary — Book a Service
+        GestureDetector(
+          onTap: onClientTap,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                width: double.infinity, height: 62,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.50), width: 1),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.08),
+                        blurRadius: 20, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.calendar_month_rounded,
+                        color: _kPrimaryDark, size: 20),
+                    SizedBox(width: 10),
+                    Text('Book a Service',
+                        style: TextStyle(
+                          fontFamily: 'Inter', fontSize: 17,
+                          fontWeight: FontWeight.w700, color: _kPrimaryDark,
+                        )),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Secondary — Join as Provider
+        GestureDetector(
+          onTap: onProviderTap,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                width: double.infinity, height: 62,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.38), width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 28, height: 28,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _kAccent.withOpacity(0.22),
+                        border: Border.all(
+                            color: _kAccent.withOpacity(0.55), width: 1.2),
+                      ),
+                      child: const Icon(Icons.store_rounded,
+                          color: Colors.white, size: 15),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('Join as Provider',
+                        style: TextStyle(
+                          fontFamily: 'Inter', fontSize: 17,
+                          fontWeight: FontWeight.w600, color: Colors.white,
+                        )),
+                    const SizedBox(width: 6),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        color: Colors.white.withOpacity(0.55), size: 13),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        GestureDetector(
+          onTap: () => Navigator.pushNamed(context, '/login'),
+          child: Text(
+            'Already have an account? Log In',
+            style: TextStyle(
+              fontFamily: 'Inter', fontSize: 13,
+              color: Colors.white.withOpacity(0.55),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Atom Widgets ──────────────────────────────────────────────────
 class _GlassCircleBtn extends StatelessWidget {
   final IconData     icon;
   final double       size;
   final VoidCallback onTap;
-  const _GlassCircleBtn({required this.icon, required this.size, required this.onTap});
+  const _GlassCircleBtn(
+      {required this.icon, required this.size, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -662,8 +727,8 @@ class _GlassCircleBtn extends StatelessWidget {
           child: Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              shape:  BoxShape.circle,
-              color:  Colors.white.withOpacity(0.15),
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.15),
               border: Border.all(
                   color: Colors.white.withOpacity(0.28), width: 1),
             ),
@@ -686,10 +751,10 @@ class _GlassRing extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          width:  outerDia, height: outerDia,
+          width: outerDia, height: outerDia,
           decoration: BoxDecoration(
-            shape:  BoxShape.circle,
-            color:  Colors.white.withOpacity(0.12),
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.12),
             border: Border.all(
                 color: Colors.white.withOpacity(0.22), width: 1.5),
           ),
@@ -708,8 +773,7 @@ class _GlassRoundedRect extends StatelessWidget {
   final Widget   child;
 
   const _GlassRoundedRect({
-    this.width,
-    this.height,
+    this.width, this.height,
     required this.radius,
     required this.tintOpacity,
     required this.blurSigma,
@@ -723,10 +787,9 @@ class _GlassRoundedRect extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
         child: Container(
-          width:  width,
-          height: height,
+          width: width, height: height,
           decoration: BoxDecoration(
-            color:        Colors.white.withOpacity(tintOpacity),
+            color: Colors.white.withOpacity(tintOpacity),
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
                 color: Colors.white.withOpacity(0.24), width: 1),
@@ -745,38 +808,26 @@ class _TextGlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _GlassRoundedRect(
-      width:       double.infinity,
-      radius:      28,
-      tintOpacity: 0.12,
-      blurSigma:   20,
+      width: double.infinity, radius: 28,
+      tintOpacity: 0.12, blurSigma: 20,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              data.title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily:    'Inter',
-                fontSize:      30,
-                fontWeight:    FontWeight.w800,
-                color:         Colors.white,
-                letterSpacing: -0.5,
-                height:        1.18,
-              ),
-            ),
+            Text(data.title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Inter', fontSize: 30, fontWeight: FontWeight.w800,
+                  color: Colors.white, letterSpacing: -0.5, height: 1.18,
+                )),
             const SizedBox(height: 12),
-            Text(
-              data.subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize:   15,
-                color:      Colors.white.withOpacity(0.86),
-                height:     1.55,
-              ),
-            ),
+            Text(data.subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter', fontSize: 15,
+                  color: Colors.white.withOpacity(0.86), height: 1.55,
+                )),
           ],
         ),
       ),
@@ -794,10 +845,10 @@ class _SmallGlassCircle extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
-          width:  size, height: size,
+          width: size, height: size,
           decoration: BoxDecoration(
-            shape:  BoxShape.circle,
-            color:  Colors.white.withOpacity(0.08),
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.08),
             border: Border.all(
                 color: Colors.white.withOpacity(0.16), width: 1),
           ),
@@ -823,23 +874,18 @@ class _ArrowCircleButton extends StatelessWidget {
             child: Container(
               width: 76, height: 76,
               decoration: BoxDecoration(
-                shape:  BoxShape.circle,
-                color:  Colors.white.withOpacity(0.13),
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.13),
                 border: Border.all(
                     color: Colors.white.withOpacity(0.32), width: 1.5),
               ),
               child: Center(
                 child: Container(
-                  width:  46, height: 46,
+                  width: 46, height: 46,
                   decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward,
-                    color: _kPrimary, // purple arrow — replaces teal
-                    size:  22,
-                  ),
+                      shape: BoxShape.circle, color: Colors.white),
+                  child: const Icon(Icons.arrow_forward,
+                      color: _kPrimary, size: 22),
                 ),
               ),
             ),
@@ -855,65 +901,18 @@ class _ArrowCircleButton extends StatelessWidget {
             child: Container(
               width: 72, height: 72,
               decoration: BoxDecoration(
-                shape:  BoxShape.circle,
-                color:  Colors.white.withOpacity(0.15),
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.15),
                 border: Border.all(
                     color: Colors.white.withOpacity(0.28), width: 1.5),
               ),
-              child: const Icon(
-                Icons.arrow_forward,
-                color: Colors.white,
-                size:  28,
-              ),
+              child: const Icon(Icons.arrow_forward,
+                  color: Colors.white, size: 28),
             ),
           ),
         ),
       );
     }
-  }
-}
-
-class _GetStartedButton extends StatelessWidget {
-  final VoidCallback onTap;
-  const _GetStartedButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: Container(
-            width:  double.infinity, height: 62,
-            decoration: BoxDecoration(
-              color:        Colors.white.withOpacity(0.86),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.50), width: 1),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Text(
-                  'Get Started',
-                  style: TextStyle(
-                    fontFamily:  'Inter',
-                    fontSize:    17,
-                    fontWeight:  FontWeight.w700,
-                    color:       _kPrimaryDark, // dark purple text — replaces teal
-                  ),
-                ),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward,
-                    color: _kPrimaryDark, size: 20),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -927,16 +926,14 @@ class _SoftBlob extends StatelessWidget {
     return ImageFiltered(
       imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
       child: Container(
-        width:  size, height: size,
+        width: size, height: size,
         decoration: BoxDecoration(shape: BoxShape.circle, color: color),
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// DATA MODEL
-// ══════════════════════════════════════════════════════════════
+// ── Data Model ────────────────────────────────────────────────────
 enum PageType { medical, calendar, confirm }
 
 class _PageData {

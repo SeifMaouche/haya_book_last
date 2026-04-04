@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/booking_model.dart';
 import '../models/provider_model.dart';
+import 'provider_state.dart'; // import so we can notify the provider side
 
 class BookingProvider extends ChangeNotifier {
   List<Booking> _bookings = [];
   List<ServiceProvider> _providers = [];
   List<TimeSlot> _availableSlots = [];
+  List<String> _favorites = [];
   ServiceProvider? _selectedProvider;
   Service? _selectedService;
   DateTime? _selectedDate;
@@ -17,6 +19,7 @@ class BookingProvider extends ChangeNotifier {
   List<Booking> get bookings => List.unmodifiable(_bookings);
   List<ServiceProvider> get providers => _providers;
   List<TimeSlot> get availableSlots => _availableSlots;
+  List<String> get favorites => _favorites;
   ServiceProvider? get selectedProvider => _selectedProvider;
   Service? get selectedService => _selectedService;
   DateTime? get selectedDate => _selectedDate;
@@ -233,8 +236,13 @@ class BookingProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Create booking ───────────────────────────────────────────
-  Future<bool> createBooking(String notes) async {
+  // ── Create booking — AUTO-CONFIRMED ─────────────────────────
+  /// Creates a booking with `status: 'confirmed'` immediately.
+  /// Also registers it on the provider side via [providerState].
+  Future<bool> createBooking(
+      String notes, {
+        ProviderStateProvider? providerState,
+      }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -249,21 +257,36 @@ class BookingProvider extends ChangeNotifier {
 
       await Future.delayed(const Duration(milliseconds: 800));
 
+      final bookingId =
+          'BK${DateTime.now().year}${(DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(6, '0')}';
+
       final booking = Booking(
-        id: 'BK${DateTime.now().year}${(DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(6, '0')}',
-        userId: 'current_user_id',
-        providerId: _selectedProvider!.id,
+        id:           bookingId,
+        userId:       'current_user_id',
+        providerId:   _selectedProvider!.id,
         providerName: _selectedProvider!.name,
-        serviceName: _selectedService!.name,
-        bookingDate: _selectedDate!,
-        timeSlot: _selectedTimeSlot!,
-        price: _selectedService!.price,
-        status: 'confirmed',
-        notes: notes,
-        createdAt: DateTime.now(),
+        serviceName:  _selectedService!.name,
+        bookingDate:  _selectedDate!,
+        timeSlot:     _selectedTimeSlot!,
+        price:        _selectedService!.price,
+        status:       'confirmed', // always confirmed — no pending
+        notes:        notes,
+        createdAt:    DateTime.now(),
       );
 
       _bookings.add(booking);
+
+      // ── Sync to provider side (auto-confirm) ──────────────────
+      providerState?.addBookingFromClient(
+        id:          bookingId,
+        clientName:  'Client', // replace with real user name when auth is wired
+        serviceName: _selectedService!.name,
+        timeSlot:    _selectedTimeSlot!,
+        bookingDate: _selectedDate!,
+        price:       _selectedService!.price,
+        notes:       notes.isNotEmpty ? notes : null,
+      );
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -282,17 +305,17 @@ class BookingProvider extends ChangeNotifier {
       if (i != -1) {
         final b = _bookings[i];
         _bookings[i] = Booking(
-          id: b.id,
-          userId: b.userId,
-          providerId: b.providerId,
+          id:          b.id,
+          userId:      b.userId,
+          providerId:  b.providerId,
           providerName: b.providerName,
           serviceName: b.serviceName,
           bookingDate: b.bookingDate,
-          timeSlot: b.timeSlot,
-          price: b.price,
-          status: 'cancelled',
-          notes: b.notes,
-          createdAt: b.createdAt,
+          timeSlot:    b.timeSlot,
+          price:       b.price,
+          status:      'cancelled',
+          notes:       b.notes,
+          createdAt:   b.createdAt,
           cancelledAt: DateTime.now(),
         );
         notifyListeners();
@@ -314,17 +337,17 @@ class BookingProvider extends ChangeNotifier {
       if (i != -1) {
         final b = _bookings[i];
         _bookings[i] = Booking(
-          id: b.id,
-          userId: b.userId,
-          providerId: b.providerId,
+          id:          b.id,
+          userId:      b.userId,
+          providerId:  b.providerId,
           providerName: b.providerName,
           serviceName: b.serviceName,
           bookingDate: newDate,
-          timeSlot: newTimeSlot,
-          price: b.price,
-          status: 'confirmed',
-          notes: b.notes,
-          createdAt: b.createdAt,
+          timeSlot:    newTimeSlot,
+          price:       b.price,
+          status:      'confirmed',
+          notes:       b.notes,
+          createdAt:   b.createdAt,
         );
         notifyListeners();
         return true;
@@ -337,12 +360,31 @@ class BookingProvider extends ChangeNotifier {
     }
   }
 
+  // ── Favorites ────────────────────────────────────────────────
+  void toggleFavorite(String providerId) {
+    if (_favorites.contains(providerId)) {
+      _favorites.remove(providerId);
+    } else {
+      _favorites.add(providerId);
+    }
+    notifyListeners();
+  }
+
+  bool isFavorite(String providerId) => _favorites.contains(providerId);
+
+  List<ServiceProvider> getFavoriteProviders() {
+    return _providers
+        .where((provider) => _favorites.contains(provider.id))
+        .toList();
+  }
+
+  // ── Reset & Fetch ────────────────────────────────────────────
   void resetBookingSelection() {
     _selectedProvider = null;
-    _selectedService = null;
-    _selectedDate = null;
+    _selectedService  = null;
+    _selectedDate     = null;
     _selectedTimeSlot = null;
-    _availableSlots = [];
+    _availableSlots   = [];
     notifyListeners();
   }
 

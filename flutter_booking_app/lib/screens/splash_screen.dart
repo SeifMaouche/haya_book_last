@@ -296,7 +296,7 @@ class _WordMark extends StatelessWidget {
           ],
         ).createShader(bounds),
         child: const Text(
-          'HayaBook',
+          'Mawidi',
           style: TextStyle(
             fontFamily:    'Inter',
             fontSize:      52,

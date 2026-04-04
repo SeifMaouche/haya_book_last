@@ -1,66 +1,72 @@
-// lib/screens/messages_screen.dart
+// lib/screens/provider/provider_messages_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'chat_screen.dart';
+import '../../widgets/provider_bottom_nav_bar.dart';
+import '../chat_screen.dart';
 
 const _kPrimary = Color(0xFF7C3AED);
 const _kBg = Color(0xFFF5F3FF);
 const _kTextDark = Color(0xFF1F2937);
 const _kTextMuted = Color(0xFF6B7280);
 
-class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({Key? key}) : super(key: key);
+class ProviderMessagesScreen extends StatefulWidget {
+  const ProviderMessagesScreen({Key? key}) : super(key: key);
 
   @override
-  State<MessagesScreen> createState() => _MessagesScreenState();
+  State<ProviderMessagesScreen> createState() => _ProviderMessagesScreenState();
 }
 
-class _MessagesScreenState extends State<MessagesScreen> {
+class _ProviderMessagesScreenState extends State<ProviderMessagesScreen> {
   final _searchCtrl = TextEditingController();
 
   final List<Map<String, dynamic>> _conversations = [
     {
       'id': '1',
-      'name': 'Dr. Samy',
-      'avatar': 'assets/images/doc.png',
-      'lastMessage': 'Your appointment is confirmed...',
-      'time': '2H AGO',
-      'unread': 1,
+      'name': 'Sarah M.',
+      'avatar': '',
+      'initials': 'SM',
+      'lastMessage': 'Thank you for the consultation!',
+      'time': '1H AGO',
+      'unread': 2,
       'isOnline': true,
     },
     {
       'id': '2',
-      'name': "Lina's Salon",
-      'avatar': 'assets/images/salon.png',
-      'lastMessage': "See you at 3 PM today! Don't forget...",
-      'time': '5H AGO',
+      'name': 'Ahmed K.',
+      'avatar': '',
+      'initials': 'AK',
+      'lastMessage': 'Can I reschedule my appointment?',
+      'time': '3H AGO',
       'unread': 0,
       'isOnline': false,
     },
     {
       'id': '3',
-      'name': 'Fitness Pro',
-      'avatar': 'assets/images/fitness.png',
-      'lastMessage': 'Can we reschedule our person...',
+      'name': 'Fatima B.',
+      'avatar': '',
+      'initials': 'FB',
+      'lastMessage': 'What time should I arrive tomorrow?',
       'time': 'YESTERDAY',
-      'unread': 3,
+      'unread': 1,
       'isOnline': false,
     },
     {
       'id': '4',
-      'name': 'Chef Alex',
-      'avatar': 'assets/images/chef.png',
-      'lastMessage': "I've sent the menu options for your e...",
-      'time': 'TUE',
+      'name': 'Omar T.',
+      'avatar': '',
+      'initials': 'OT',
+      'lastMessage': 'Is the clinic open on weekends?',
+      'time': 'MON',
       'unread': 0,
       'isOnline': false,
     },
     {
       'id': '5',
-      'name': 'Clean Masters',
-      'avatar': 'assets/images/cleaning.png',
-      'lastMessage': "Thanks for your feedback! We're gla...",
-      'time': 'MON',
+      'name': 'Leila Z.',
+      'avatar': '',
+      'initials': 'LZ',
+      'lastMessage': 'Perfect! See you then.',
+      'time': 'SUN',
       'unread': 0,
       'isOnline': false,
     },
@@ -99,7 +105,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
             // ── Conversations List ────────────────────────
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.fromLTRB(
+                    16, 0, 16, MediaQuery.of(context).padding.bottom + 90),
                 itemCount: _conversations.length,
                 itemBuilder: (_, i) => _ConversationTile(
                   conversation: _conversations[i],
@@ -110,6 +117,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         builder: (_) => ChatScreen(
                           providerName: _conversations[i]['name'] as String,
                           providerAvatar: _conversations[i]['avatar'] as String,
+                          isProvider: true,
                         ),
                       ),
                     );
@@ -120,6 +128,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: const ProviderBottomNavBar(currentIndex: 2),
     );
   }
 }
@@ -259,6 +268,7 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final name = conversation['name'] as String;
     final avatar = conversation['avatar'] as String;
+    final initials = conversation['initials'] as String? ?? '';
     final lastMsg = conversation['lastMessage'] as String;
     final time = conversation['time'] as String;
     final unread = conversation['unread'] as int;
@@ -287,10 +297,12 @@ class _ConversationTile extends StatelessWidget {
                       : null,
                   child: avatar.isEmpty
                       ? Text(
-                    name.substring(0, 1).toUpperCase(),
+                    initials.isNotEmpty
+                        ? initials
+                        : name.substring(0, 1).toUpperCase(),
                     style: const TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: _kPrimary,
                     ),
