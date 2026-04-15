@@ -84,12 +84,12 @@ class CategoryCard extends StatelessWidget {
   final bool showSubtitle;
 
   const CategoryCard({
-    Key? key,
+    super.key,
     required this.category,
     this.size = 100,
     this.onTap,
     this.showSubtitle = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +108,7 @@ class CategoryCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               border: category.borderColor != null
                   ? Border.all(
-                  color: category.borderColor!.withOpacity(0.3), width: 1)
+                      color: category.borderColor!.withOpacity(0.3), width: 1)
                   : null,
             ),
             child: Center(
@@ -160,11 +160,11 @@ class CategoryListCard extends StatelessWidget {
   final String? providerCount;
 
   const CategoryListCard({
-    Key? key,
+    super.key,
     required this.category,
     this.onTap,
     this.providerCount,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -235,7 +235,7 @@ class CategoryListCard extends StatelessWidget {
             if (providerCount != null)
               Container(
                 padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: category.backgroundColor,
                   borderRadius: BorderRadius.circular(99),
@@ -269,11 +269,11 @@ class CategoryFilterChip extends StatelessWidget {
   final VoidCallback? onTap;
 
   const CategoryFilterChip({
-    Key? key,
+    super.key,
     required this.category,
     this.isSelected = false,
     this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
