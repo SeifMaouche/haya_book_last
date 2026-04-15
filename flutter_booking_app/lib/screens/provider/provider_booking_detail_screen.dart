@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../providers/provider_state.dart';
 import '../../models/provider_models.dart';
 import '../../widgets/glass_kit.dart';
+import '../../widgets/haya_avatar.dart';
+import '../chat_screen.dart';
 
 const _kPrimary     = Color(0xFF7C3AED);
 const _kPrimaryDeep = Color(0xFF6D28D9);
@@ -172,7 +174,17 @@ class _ProviderBookingDetailScreenState
               cancelling: _cancelling,
               isBusy:     isBusy,
               isUpcoming: isUpcoming,
-              onMessage:  () => Navigator.pushNamed(context, '/messages'),
+              onMessage:  () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    receiverName:   b.clientName,
+                    receiverId:     b.clientId,
+                    receiverAvatar: b.clientAvatar,
+                    isProvider:     true,
+                  ),
+                ),
+              ),
               onComplete: (isUpcoming && !isBusy) ? _complete : null,
               onCancel:   (isUpcoming && !isBusy) ? _cancel   : null,
               bottomPad:  pad.bottom,
@@ -380,8 +392,13 @@ class _ClientSection extends StatelessWidget {
                 color: Colors.black.withOpacity(0.10),
                 blurRadius: 20, offset: const Offset(0, 6))],
           ),
-          child: const Icon(Icons.person_rounded,
-              color: _kPrimary, size: 50),
+          child: HayaAvatar(
+            avatarUrl:    booking.clientAvatar,
+            name:         booking.clientName,
+            size:         108,
+            borderRadius: 99,
+            isProvider:   false,
+          ),
         ),
         if (booking.clientOnline)
           Positioned(bottom: 4, right: 5,

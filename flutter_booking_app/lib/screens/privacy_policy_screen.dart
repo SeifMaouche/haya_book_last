@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../config/theme.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
-  const PrivacyPolicyScreen({Key? key}) : super(key: key);
+  const PrivacyPolicyScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
-                      width: 40, height: 40,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -79,7 +80,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       child: Stack(
                         children: [
                           Positioned(
-                            right: -10, top: -10,
+                            right: -10,
+                            top: -10,
                             child: Icon(Icons.lock_rounded,
                                 size: 90,
                                 color: Colors.white.withOpacity(0.08)),
@@ -158,13 +160,13 @@ class PrivacyPolicyScreen extends StatelessWidget {
                           _highlightBox(
                             label: 'PERSONALIZATION',
                             text:
-                            'To tailor your booking experience based on your history.',
+                                'To tailor your booking experience based on your history.',
                           ),
                           const SizedBox(height: 10),
                           _highlightBox(
                             label: 'COMMUNICATION',
                             text:
-                            'To send updates, security alerts, and administrative messages.',
+                                'To send updates, security alerts, and administrative messages.',
                           ),
                         ],
                       ),
@@ -198,12 +200,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     const SizedBox(height: 16),
 
                     // ── Section 4: Security ──────────────────────
-                    _PolicySection(
+                    const _PolicySection(
                       icon: Icons.shield_outlined,
-                      iconBg: const Color(0xFFF0F9FF),
-                      iconColor: const Color(0xFF0EA5E9),
+                      iconBg: Color(0xFFF0F9FF),
+                      iconColor: Color(0xFF0EA5E9),
                       title: 'Data Security',
-                      child: const Text(
+                      child: Text(
                         'We implement industry-standard security measures including SSL encryption, secure servers, and regular security audits to protect your personal information from unauthorized access, alteration, or disclosure.',
                         style: TextStyle(
                             fontFamily: 'Inter',
@@ -215,16 +217,16 @@ class PrivacyPolicyScreen extends StatelessWidget {
                     const SizedBox(height: 32),
 
                     // ── Footer ───────────────────────────────────
-                    Center(
+                    const Center(
                       child: Column(
                         children: [
                           Text('Last updated: May 20, 2024',
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 12,
                                   color: AppColors.textLight)),
-                          const SizedBox(height: 4),
-                          const Text('© 2024 HayaBook Inc. All rights reserved.',
+                          SizedBox(height: 4),
+                          Text('© 2024 HayaBook Inc. All rights reserved.',
                               style: TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 12,
@@ -250,11 +252,12 @@ class PrivacyPolicyScreen extends StatelessWidget {
         children: [
           Container(
             margin: const EdgeInsets.only(top: 5),
-            width: 16, height: 16,
+            width: 16,
+            height: 16,
             decoration: const BoxDecoration(
                 color: AppColors.primary, shape: BoxShape.circle),
-            child: const Icon(Icons.check_rounded,
-                color: Colors.white, size: 10),
+            child:
+                const Icon(Icons.check_rounded, color: Colors.white, size: 10),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -357,10 +360,10 @@ class _PolicySection extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 40, height: 40,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(12)),
+                    color: iconBg, borderRadius: BorderRadius.circular(12)),
                 child: Icon(icon, color: iconColor, size: 20),
               ),
               const SizedBox(width: 12),

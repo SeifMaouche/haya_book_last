@@ -7,6 +7,11 @@ import '../../providers/provider_state.dart';
 import '../../models/provider_models.dart';
 import '../../widgets/provider_bottom_nav_bar.dart';
 import '../../widgets/glass_kit.dart';
+import '../../widgets/haya_avatar.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/chat_provider.dart';
+import '../../config/app_config.dart';
+import '../../providers/notification_provider.dart';
 
 const _kPrimary     = Color(0xFF6D28D9);
 const _kPrimaryMid  = Color(0xFF7C3AED);
@@ -16,8 +21,28 @@ const _kLavender    = Color(0xFFA78BFA);
 const _kTextDark    = Color(0xFF1E1B4B);
 const _kTextMuted   = Color(0xFF6B7280);
 
-class ProviderHomeScreen extends StatelessWidget {
+class ProviderHomeScreen extends StatefulWidget {
   const ProviderHomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProviderHomeScreen> createState() => _ProviderHomeScreenState();
+}
+
+class _ProviderHomeScreenState extends State<ProviderHomeScreen> {
+  
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final prov = Provider.of<ProviderStateProvider>(context, listen: false);
+      prov.loadInitialData();
+      prov.initSocket(); // Connect to real-time booking updates
+      final chat = Provider.of<ChatProvider>(context, listen: false);
+      chat.initSocket();
+      chat.fetchMyConversations();
+      Provider.of<NotificationProvider>(context, listen: false).fetchNotifications();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +73,18 @@ class ProviderHomeScreen extends StatelessWidget {
                   SliverToBoxAdapter(child: FadeSlide(
                       delay: const Duration(milliseconds: 60),
                       child: _StatsSection(ps: ps))),
-                  // ── Today's upcoming bookings (replaces pending section) ──
+                  // ── Quick Access ──
                   SliverToBoxAdapter(child: FadeSlide(
-                      delay: const Duration(milliseconds: 120),
+                      delay: const Duration(milliseconds: 100),
+                      child: _QuickAccessSection())),
+                  // ── Today's appointments (horizontal) ──
+                  SliverToBoxAdapter(child: FadeSlide(
+                      delay: const Duration(milliseconds: 140),
                       child: _TodayBookingsSection(ps: ps))),
+                  // ── Upcoming bookings (vertical) ──
                   SliverToBoxAdapter(child: FadeSlide(
                       delay: const Duration(milliseconds: 180),
-                      child: _QuickAccessSection())),
+                      child: _UpcomingBookingsSection(ps: ps))),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
@@ -76,24 +106,12 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       child: Row(children: [
-        Container(
-          width: 46, height: 46,
-          padding: const EdgeInsets.all(2),
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [Color(0xFF8B5CF6), _kPrimaryDeep, _kPrimaryDark],
-            ),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                  color: Colors.white.withOpacity(0.5), width: 1.5),
-              color: const Color(0xFF0D9488),
-            ),
-            child: const Icon(Icons.store_rounded,
-                color: Colors.white, size: 19),
+        Consumer<AuthProvider>(
+          builder: (_, auth, __) => HayaAvatar(
+            avatarUrl: auth.photoPath,
+            size: 46,
+            isProvider: true,
+            borderRadius: 99,
           ),
         ),
         const SizedBox(width: 10),
@@ -112,10 +130,44 @@ class _Header extends StatelessWidget {
             )),
           ],
         )),
-        _WhiteCircle(
-          size: 40,
-          child: const Icon(Icons.notifications_outlined,
-              color: _kPrimaryMid, size: 19),
+        Consumer<NotificationProvider>(
+          builder: (_, np, __) => Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ScaleTap(
+                onTap: () => Navigator.pushNamed(context, '/notifications'),
+                child: _WhiteCircle(
+                  size: 40,
+                  child: const Icon(Icons.notifications_outlined,
+                      color: _kPrimaryMid, size: 19),
+                ),
+              ),
+              if (np.unreadCount > 0)
+                Positioned(
+                  top: 0, right: 0,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      np.unreadCount > 9 ? '9+' : '${np.unreadCount}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ]),
     );
@@ -294,9 +346,7 @@ class _RatingCard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-// TODAY'S BOOKINGS  —  replaces the old "Pending Requests" section.
-// Shows today's confirmed upcoming bookings so the provider can
-// see at a glance who is coming in.
+// TODAY'S BOOKINGS (Horizontal Strip)
 // ══════════════════════════════════════════════════════════════
 class _TodayBookingsSection extends StatelessWidget {
   final ProviderStateProvider ps;
@@ -311,13 +361,153 @@ class _TodayBookingsSection extends StatelessWidget {
         b.bookingDate.year  == today.year,
     ).toList();
 
-    if (todayBookings.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 22, 0, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text("Today", style: TextStyle(
+            fontFamily: 'Inter', fontSize: 16,
+            fontWeight: FontWeight.w900, color: _kTextDark,
+            letterSpacing: -0.3,
+          )),
+        ),
+        const SizedBox(height: 12),
+        if (todayBookings.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: const Text(
+                'No appointments scheduled for today.',
+                style: TextStyle(
+                  fontFamily: 'Inter', fontSize: 13,
+                  fontWeight: FontWeight.w500, color: _kTextMuted,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 115,
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: todayBookings.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => _TodayCardCompact(booking: todayBookings[i]),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+class _TodayCardCompact extends StatelessWidget {
+  final ProviderBooking booking;
+  const _TodayCardCompact({required this.booking});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(
+          context, '/provider/booking-detail', arguments: booking),
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(
+              color: const Color(0xFF7C3AED).withOpacity(0.08),
+              blurRadius: 16, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              HayaAvatar(
+                avatarUrl: booking.clientAvatar,
+                name: booking.clientName,
+                size: 32,
+                borderRadius: 99,
+                isProvider: false,
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Text(booking.clientName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter', fontSize: 13,
+                  fontWeight: FontWeight.w800, color: _kTextDark,
+                ))),
+            ]),
+            const Spacer(),
+            Text(booking.serviceName, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter', fontSize: 11,
+                fontWeight: FontWeight.w500, color: _kTextMuted,
+              )),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDCFCE7),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.access_time_rounded, size: 10, color: Color(0xFF16A34A)),
+                  const SizedBox(width: 4),
+                  Text(booking.timeSlot, style: const TextStyle(
+                    fontFamily: 'Inter', fontSize: 10,
+                    fontWeight: FontWeight.w700, color: Color(0xFF16A34A),
+                  )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// UPCOMING BOOKINGS (Vertical List)
+// ══════════════════════════════════════════════════════════════
+class _UpcomingBookingsSection extends StatelessWidget {
+  final ProviderStateProvider ps;
+  const _UpcomingBookingsSection({required this.ps});
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    // Exclude today to get purely "upcoming future"
+    var futureBookings = ps.upcomingBookings.where((b) {
+      final isToday = b.bookingDate.day == today.day &&
+          b.bookingDate.month == today.month &&
+          b.bookingDate.year == today.year;
+      return !isToday && b.bookingDate.isAfter(today);
+    }).toList();
+
+    futureBookings.sort((a, b) => a.bookingDate.compareTo(b.bookingDate));
+    final nextFive = futureBookings.take(5).toList();
+
+    if (nextFive.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 26, 16, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Text("Today's Appointments", style: TextStyle(
+          const Text("Upcoming", style: TextStyle(
             fontFamily: 'Inter', fontSize: 16,
             fontWeight: FontWeight.w900, color: _kTextDark,
             letterSpacing: -0.3,
@@ -341,10 +531,7 @@ class _TodayBookingsSection extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 12),
-        ...todayBookings.asMap().entries.map((e) => FadeSlide(
-          delay: Duration(milliseconds: 200 + e.key * 60),
-          child: _TodayBookingCard(booking: e.value),
-        )),
+        ...nextFive.map((b) => _TodayBookingCard(booking: b)),
       ]),
     );
   }
@@ -392,12 +579,13 @@ class _TodayBookingCard extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             // Avatar
-            ClipOval(child: Container(
-              width: 46, height: 46,
-              color: const Color(0xFFEDE9FE),
-              child: const Icon(Icons.person_rounded,
-                  color: _kPrimaryMid, size: 23),
-            )),
+            HayaAvatar(
+              avatarUrl:    b.clientAvatar,
+              name:         b.clientName,
+              size:         46,
+              borderRadius: 99,
+              isProvider:   true, // Forces the purple brand color for the portal
+            ),
             const SizedBox(width: 10),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,10 +602,10 @@ class _TodayBookingCard extends StatelessWidget {
                 )),
                 const SizedBox(height: 4),
                 Row(children: [
-                  const Icon(Icons.access_time_rounded,
+                  const Icon(Icons.calendar_today_rounded,
                       size: 11, color: _kPrimary),
                   const SizedBox(width: 4),
-                  Text(b.timeSlot, style: const TextStyle(
+                  Text('${b.bookingDate.day} ${_mon(b.bookingDate.month)} • ${b.timeSlot}', style: const TextStyle(
                     fontFamily: 'Inter', fontSize: 11,
                     fontWeight: FontWeight.w700, color: _kPrimary,
                   )),
@@ -450,7 +638,7 @@ class _QuickAccessSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 26, 16, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Quick Access', style: TextStyle(
           fontFamily: 'Inter', fontSize: 16,
@@ -460,23 +648,23 @@ class _QuickAccessSection extends StatelessWidget {
         const SizedBox(height: 14),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           _QuickItem(
-            icon: Icons.add_box_rounded, label: 'New Slot',
+            icon: Icons.event_available_rounded, label: 'Availability',
             onTap: () =>
-                Navigator.pushNamed(context, '/provider/add-service'),
-          ),
-          _QuickItem(
-            icon: Icons.history_rounded, label: 'History',
-            onTap: () =>
-                Navigator.pushNamed(context, '/provider/bookings'),
-          ),
-          _QuickItem(
-            icon: Icons.chat_bubble_rounded, label: 'Messages',
-            onTap: () => Navigator.pushNamed(context, '/messages'),
+                Navigator.pushNamed(context, '/provider/availability'),
           ),
           _QuickItem(
             icon: Icons.settings_rounded, label: 'Settings',
             onTap: () =>
                 Navigator.pushNamed(context, '/provider/settings'),
+          ),
+          _QuickItem(
+            icon: Icons.star_rounded, label: 'Reviews',
+            onTap: () => Navigator.pushNamed(context, '/provider/reviews'),
+          ),
+          _QuickItem(
+            icon: Icons.bar_chart_rounded, label: 'Earnings',
+            onTap: () =>
+                Navigator.pushNamed(context, '/provider/earnings'),
           ),
         ]),
       ]),

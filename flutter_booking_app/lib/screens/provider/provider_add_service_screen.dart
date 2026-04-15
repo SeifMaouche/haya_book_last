@@ -61,20 +61,42 @@ class _ProviderAddServiceScreenState
   Future<void> _save() async {
     if (_nameCtrl.text.trim().isEmpty) return;
     setState(() => _saving = true);
-    final ps = Provider.of<ProviderStateProvider>(context, listen: false);
-    final service = ProviderService(
-      id:              widget.service?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
-      name:            _nameCtrl.text.trim(),
-      description:     _descCtrl.text.trim(),
-      price:           double.tryParse(_priceCtrl.text) ?? 0,
-      durationMinutes: _selectedDuration ?? 60,
-      isVisible:       _isVisible,
-    );
-    if (widget.service == null) ps.addService(service);
-    else ps.updateService(service);
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (mounted) Navigator.pop(context);
+    
+    try {
+      final ps = Provider.of<ProviderStateProvider>(context, listen: false);
+      final name     = _nameCtrl.text.trim();
+      final desc     = _descCtrl.text.trim();
+      final price    = double.tryParse(_priceCtrl.text) ?? 0.0;
+      final duration = _selectedDuration ?? 60;
+
+      bool success;
+      if (widget.service == null) {
+        success = await ps.addService(name, desc, price, duration);
+      } else {
+        success = await ps.updateService(widget.service!.id, name, desc, price, duration);
+      }
+      
+      if (success) {
+        // Force a data refresh and wait a moment for the UI to be ready
+        await ps.loadInitialData();
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (mounted) Navigator.pop(context);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to save service. Check your connection.'))
+          );
+          setState(() => _saving = false);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}'))
+        );
+        setState(() => _saving = false);
+      }
+    }
   }
 
   @override
@@ -228,7 +250,7 @@ class _ProviderAddServiceScreenState
           ),
         ]),
       ),
-      bottomNavigationBar: const ProviderBottomNavBar(currentIndex: 2),
+      bottomNavigationBar: const ProviderBottomNavBar(currentIndex: 3),
     );
   }
 }
@@ -266,7 +288,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         const Expanded(
-          child: Text('Add/Edit Service',
+          child: Text('Service Details',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Inter', fontSize: 16,
@@ -546,15 +568,18 @@ class _SaveBar extends StatelessWidget {
               ? const Center(child: SizedBox(width: 20, height: 20,
               child: CircularProgressIndicator(
                   color: Colors.white, strokeWidth: 2.5)))
-              : const Row(
+              : Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.save_rounded, color: Colors.white, size: 19),
-              SizedBox(width: 8),
-              Text('Save Service', style: TextStyle(
-                fontFamily: 'Inter', fontSize: 15,
-                fontWeight: FontWeight.w700, color: Colors.white,
-              )),
+              const Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 19),
+              const SizedBox(width: 8),
+              Text(
+                onSave == null ? 'Saving...' : 'Confirm Changes', 
+                style: const TextStyle(
+                  fontFamily: 'Inter', fontSize: 15,
+                  fontWeight: FontWeight.w700, color: Colors.white,
+                ),
+              ),
             ],
           ),
         ),

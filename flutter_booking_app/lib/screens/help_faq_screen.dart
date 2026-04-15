@@ -67,12 +67,7 @@ class _HelpFaqScreenState extends State<HelpFaqScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: AppColors.textDark)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: AppColors.textDark),
-            onPressed: () {},
-          ),
-        ],
+        actions: const [],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: Color(0xFFE5E7EB)),

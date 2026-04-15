@@ -7,7 +7,9 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../config/theme.dart';
+import '../providers/auth_provider.dart';
 
 const _kPurpleBright = Color(0xFF8B5CF6);
 const _kPurpleDark1  = Color(0xFF1A0A3C);
@@ -41,6 +43,7 @@ class _OtpVerificationScreenState
   bool               _isVerifying = false;
   int                _secondsLeft = 30;
   Timer?             _timer;
+  String?            _error;
 
   late final AnimationController _cardCtrl;
   late final Animation<double>   _cardOpacity;
@@ -108,29 +111,67 @@ class _OtpVerificationScreenState
 
   Future<void> _verify() async {
     if (_digits.any((d) => d.isEmpty)) return;
-    setState(() => _isVerifying = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
+    setState(() { _isVerifying = true; _error = null; });
+    
+    final code = _digits.join();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    
+    final ok = await auth.verifyPhoneOtp(widget.contact, code);
+
     if (!mounted) return;
     setState(() => _isVerifying = false);
 
-    // Route based on role — always correct because it comes from constructor
-    if (_isProvider) {
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/provider/setup', (_) => false);
+    if (ok) {
+      // ✅ Smart Routing: where to send the user next?
+      if (auth.profileComplete) {
+        // Returning user → Go to correct Home
+        final dest = auth.userType == 'provider' ? '/provider/home' : '/';
+        Navigator.pushNamedAndRemoveUntil(context, dest, (_) => false);
+      } else {
+        // New user or incomplete profile → Go to Setup
+        if (auth.userType == 'provider') {
+          Navigator.pushNamedAndRemoveUntil(context, '/provider/setup', (_) => false);
+        } else {
+          Navigator.pushNamedAndRemoveUntil(context, '/complete-profile', (_) => false);
+        }
+      }
     } else {
-      Navigator.pushNamedAndRemoveUntil(
-          context, '/complete-profile', (_) => false);
+      setState(() => _error = auth.error ?? 'Invalid code. Please try again.');
+      // Clear digits on error
+      setState(() {
+        _digits.fillRange(0, 6, '');
+        _activeIndex = 0;
+      });
     }
   }
 
-  void _resend() {
-    if (_secondsLeft > 0) return;
+  Future<void> _resend() async {
+    if (_secondsLeft > 0 || _isVerifying) return;
+    
     setState(() {
+      _isVerifying = true;
+      _error = null;
       _digits.fillRange(0, 6, '');
       _activeIndex = 0;
     });
-    _startTimer();
-    // In production: re-trigger SMS/email OTP here
+
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final ok = await auth.resendOtp(widget.contact);
+
+    if (!mounted) return;
+    setState(() => _isVerifying = false);
+
+    if (ok) {
+      _startTimer();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('New code sent successfully!', style: TextStyle(fontFamily: 'Inter')),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ));
+    } else {
+      setState(() => _error = auth.error ?? 'Failed to resend code. Please try again.');
+    }
   }
 
   bool get _allFilled => _digits.every((d) => d.isNotEmpty);
@@ -271,6 +312,18 @@ class _OtpVerificationScreenState
                 ),
               ],
             )),
+            // Error display
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              ),
+            ],
             SizedBox(height: 22 * scale),
 
             // OTP boxes

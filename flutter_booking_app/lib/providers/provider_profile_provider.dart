@@ -8,82 +8,123 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import '../services/provider_service.dart';
+import '../models/provider_model.dart'; // Add this import
 
 class ProviderProfileProvider extends ChangeNotifier {
+  final _service = ProviderService();
 
   // ── Core profile fields ──────────────────────────────────────
+  String  id           = '';
   String  businessName = 'Lumina Wellness Spa';
   String  category     = 'Health & Wellness';
-  String  bio          =
-      'At Lumina Wellness, we believe in a holistic approach to '
-      'relaxation and recovery. Our certified practitioners offer a '
-      'range of luxury treatments designed to rejuvenate your body '
-      'and soul.';
-
-  // ── Location ─────────────────────────────────────────────────
+  String  bio          = '';
   LatLng  location     = const LatLng(36.7372, 3.0865);
   String  locationText = 'Algiers, DZ';
-
-  // ── Images ───────────────────────────────────────────────────
-  /// The provider's logo / avatar (picked from device).
-  File?   logoFile;
-
-  /// Portfolio / gallery photos uploaded by the provider.
-  /// Each entry is a [File] picked from the device.
-  final List<File> portfolioPhotos = [];
-
-  // ── Rating / review stats (set by backend later) ─────────────
   double  rating       = 4.8;
   int     reviewCount  = 127;
+  bool    isVerified   = false;
 
-  // ── Services (managed by provider_services_screen) ───────────
-  // Kept minimal here — detailed management lives in provider_state.dart.
-  // These are the public-facing service names shown on the detail page.
-  List<String> serviceNames = [
-    'Consultation',
-    'Deep Tissue Massage',
-    'Aromatherapy Facial',
-  ];
+  // ── Images ───────────────────────────────────────────────────
+  File?   logoFile;
+  String? logoUrl;
+  final List<File> portfolioPhotos = [];
+  final List<PortfolioImage> portfolio = []; // Renamed from portfolioUrls
+
+  // ── Services ─────────────────────────────────────────────────
+  List<String> serviceNames = [];
+
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
 
   // ════════════════════════════════════════════════════════════
-  // UPDATE METHODS  (called from edit/complete profile screens)
+  // BACKEND SYNC
   // ════════════════════════════════════════════════════════════
 
-  void updateBasicInfo({
-    required String name,
-    required String cat,
-    required String about,
-  }) {
-    businessName = name.trim().isEmpty ? businessName : name.trim();
-    category     = cat;
-    bio          = about.trim().isEmpty ? bio : about.trim();
+  Future<void> loadProfile() async {
+    _isLoading = true;
     notifyListeners();
-  }
-
-  void updateLocation(LatLng latLng, String text) {
-    location     = latLng;
-    locationText = text;
-    notifyListeners();
-  }
-
-  void setLogo(File file) {
-    logoFile = file;
-    notifyListeners();
-  }
-
-  void addPortfolioPhoto(File file) {
-    portfolioPhotos.add(file);
-    notifyListeners();
-  }
-
-  void removePortfolioPhoto(int index) {
-    if (index >= 0 && index < portfolioPhotos.length) {
-      portfolioPhotos.removeAt(index);
+    try {
+      final p = await _service.getCurrentProviderProfile();
+      id           = p.id;
+      businessName = p.name;
+      category     = p.category;
+      bio          = p.bio;
+      location     = p.locationLatLng ?? const LatLng(36.7372, 3.0865);
+      locationText = p.location;
+      rating       = p.rating;
+      reviewCount  = p.reviewCount;
+      isVerified   = p.isVerified;
+      
+      logoUrl      = p.imageUrl;
+      portfolio.clear();
+      portfolio.addAll(p.portfolio);
+      
+      serviceNames = p.services.map((s) => s.name).toList();
+      
+      _isLoading = false;
       notifyListeners();
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      debugPrint('Error loading provider profile: $e');
     }
   }
 
-  /// Bulk-replace all portfolio photos (used by edit profile screen).
+  Future<bool> saveProfile({
+    required String name,
+    required String cat,
+    required String about,
+    required LatLng latLng,
+    required String locText,
+    File?            logo,
+    List<File>?      newPortfolioFiles,
+    List<String>?    portfolioIdsToDelete,
+    bool             removeLogo = false,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      // 1. Update basic info & logo
+      await _service.updateProviderProfile(
+        businessName: name,
+        category:     cat,
+        description:  about,
+        address:      locText,
+        latitude:     latLng.latitude,
+        longitude:    latLng.longitude,
+        bio:          about,
+        profileImageFile: logo,
+        removePhoto:      removeLogo,
+      );
+
+      // 2. Handle portfolio deletions
+      if (portfolioIdsToDelete != null && portfolioIdsToDelete.isNotEmpty) {
+        for (final id in portfolioIdsToDelete) {
+          await _service.deletePortfolioImage(id);
+        }
+      }
+
+      // 3. Handle portfolio additions
+      if (newPortfolioFiles != null && newPortfolioFiles.isNotEmpty) {
+        await _service.uploadPortfolioImages(newPortfolioFiles);
+      }
+
+      // 4. Refresh local state
+      await loadProfile(); 
+      return true;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      debugPrint('Save Profile Failed: $e');
+      return false;
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // LOCAL HELPERS
+  // ════════════════════════════════════════════════════════════
+
   void setPortfolioPhotos(List<File> photos) {
     portfolioPhotos
       ..clear()
@@ -91,31 +132,6 @@ class ProviderProfileProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Full profile save — called when provider taps "Save Changes".
-  void saveProfile({
-    required String name,
-    required String cat,
-    required String about,
-    required LatLng latLng,
-    required String locText,
-    File?            logo,
-    List<File>?      gallery,
-  }) {
-    businessName = name.trim().isEmpty ? businessName : name.trim();
-    category     = cat;
-    bio          = about.trim().isEmpty ? bio : about.trim();
-    location     = latLng;
-    locationText = locText;
-    if (logo != null) logoFile = logo;
-    if (gallery != null) setPortfolioPhotos(gallery);
-    notifyListeners();
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────
-
-  /// True when the provider has uploaded at least one portfolio photo.
-  bool get hasPortfolio => portfolioPhotos.isNotEmpty;
-
-  /// True when the provider has a logo/avatar set.
-  bool get hasLogo => logoFile != null;
-}
+  bool get hasPortfolio => portfolioPhotos.isNotEmpty || portfolio.isNotEmpty;
+  bool get hasLogo      => logoFile != null || (logoUrl != null && logoUrl!.isNotEmpty);
+}

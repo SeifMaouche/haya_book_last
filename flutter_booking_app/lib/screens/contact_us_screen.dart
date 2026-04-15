@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../config/theme.dart';
+import '../services/api_client.dart';
+import '../providers/auth_provider.dart';
+import 'support_history_screen.dart';
 
 class ContactUsScreen extends StatefulWidget {
   const ContactUsScreen({Key? key}) : super(key: key);
@@ -21,7 +25,9 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
   }
 
   Future<void> _send() async {
-    if (_subjectCtrl.text.trim().isEmpty || _msgCtrl.text.trim().isEmpty) {
+    final subject = _subjectCtrl.text.trim();
+    final message = _msgCtrl.text.trim();
+    if (subject.isEmpty || message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Please fill in Subject and Message'),
         backgroundColor: AppColors.error,
@@ -31,26 +37,46 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
       return;
     }
     setState(() => _sending = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _sending = false);
-    _subjectCtrl.clear();
-    _msgCtrl.clear();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Row(children: [
-        Icon(Icons.check_circle, color: Colors.white, size: 18),
-        SizedBox(width: 8),
-        Text("Message sent! We'll reply within 24h.",
-            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
-      ]),
-      backgroundColor: AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    ));
+    try {
+      // ✅ FIX C-contact: Real API call — previously was a fake Future.delayed
+      await apiClient.dio.post('/contact', data: {
+        'subject': subject,
+        'message': message,
+      });
+      if (!mounted) return;
+      _subjectCtrl.clear();
+      _msgCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Row(children: [
+          Icon(Icons.check_circle, color: Colors.white, size: 18),
+          SizedBox(width: 8),
+          Text("Message sent! We'll reply within 24h.",
+              style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
+        ]),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Failed to send message. Please try again.'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
+    final auth       = Provider.of<AuthProvider>(context, listen: false);
+    final isClient   = auth.userType == 'client';
+    final themeColor = isClient ? AppColors.primary : AppColors.secondary;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -68,6 +94,16 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
                 fontWeight: FontWeight.w700,
                 color: AppColors.textDark)),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.history_rounded, color: themeColor, size: 24),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupportHistoryScreen()),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
           child: Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -94,9 +130,10 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: Container(
-                  color: AppColors.primary,
-                  child: const Center(
-                    child: Icon(Icons.calendar_today_outlined,
+                  color: isClient ? AppColors.primary : AppColors.secondary,
+                  child: Center(
+                    child: Icon(
+                        isClient ? Icons.calendar_today_outlined : Icons.business_center_outlined,
                         color: Colors.white, size: 38),
                   ),
                 ),
@@ -105,10 +142,12 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
             const SizedBox(height: 24),
 
             // ── Headline ──────────────────────────────────────
-            const Text(
-              'How can we help with\nyour booking?',
+            Text(
+              isClient 
+                ? 'How can we help with\nyour booking?' 
+                : 'How can we help with\nyour business?',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 24,
                   fontWeight: FontWeight.w800,
@@ -116,10 +155,12 @@ class _ContactUsScreenState extends State<ContactUsScreen> {
                   height: 1.3),
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Our support team is here to assist you with scheduling, clinics, salons, or tutoring sessions.',
+            Text(
+              isClient
+                ? 'Our support team is here to assist you with scheduling, clinics, salons, or tutoring sessions.'
+                : 'Need help with your services, profile, or payments? Our provider support team is ready to help.',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 14,
                   color: AppColors.textMuted,

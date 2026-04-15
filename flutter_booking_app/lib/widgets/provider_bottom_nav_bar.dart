@@ -1,6 +1,8 @@
 // lib/widgets/provider_bottom_nav_bar.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../providers/chat_provider.dart';
 
 const _kPrimary = Color(0xFF7C3AED);
 
@@ -70,6 +72,7 @@ class ProviderBottomNavBar extends StatelessWidget {
             data:     _tabs[i],
             isActive: i == currentIndex,
             onTap:    () => _onTap(context, i),
+            hasBadge: (i == 2 && context.watch<ChatProvider>().hasUnreadMessages),
           )),
         ),
       ),
@@ -84,8 +87,9 @@ class _NavItem extends StatefulWidget {
   final _TabData     data;
   final bool         isActive;
   final VoidCallback onTap;
+  final bool         hasBadge;
   const _NavItem(
-      {required this.data, required this.isActive, required this.onTap});
+      {required this.data, required this.isActive, required this.onTap, this.hasBadge = false});
 
   @override
   State<_NavItem> createState() => _NavItemState();
@@ -152,15 +156,33 @@ class _NavItemState extends State<_NavItem>
                       parent: anim, curve: Curves.easeOutBack),
                   child: FadeTransition(opacity: anim, child: child),
                 ),
-                child: Icon(
-                  widget.isActive
-                      ? widget.data.activeIcon
-                      : widget.data.icon,
-                  key:   ValueKey(widget.isActive),
-                  color: widget.isActive
-                      ? _kPrimary
-                      : const Color(0xFF94A3B8),
-                  size:  widget.isActive ? 26 : 24,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      widget.isActive
+                          ? widget.data.activeIcon
+                          : widget.data.icon,
+                      key:   ValueKey(widget.isActive),
+                      color: widget.isActive
+                          ? _kPrimary
+                          : const Color(0xFF94A3B8),
+                      size:  widget.isActive ? 26 : 24,
+                    ),
+                    if (widget.hasBadge)
+                      Positioned(
+                        top:  -2,
+                        right: -2,
+                        child: Container(
+                          width:  8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

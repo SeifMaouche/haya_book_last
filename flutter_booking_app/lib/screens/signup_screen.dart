@@ -2,7 +2,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../config/theme.dart';
+import '../providers/auth_provider.dart';
 import 'otp_verification_screen.dart';
 
 const _kPurpleBright = Color(0xFF8B5CF6);
@@ -85,45 +87,78 @@ class _SignupScreenState extends State<SignupScreen>
 
   // ── Proceed with phone → OTP ──────────────────────────────
   Future<void> _sendPhoneOtp() async {
-    final phone = _phoneCtrl.text.trim();
-    if (phone.isEmpty) {
+    final phone = '$_countryCode ${_phoneCtrl.text.trim()}';
+    if (_phoneCtrl.text.trim().isEmpty) {
       _showSnack('Please enter your phone number.');
       return;
     }
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+    
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    // Note: for phone signup, we need some dummy/default password since backend requires it
+    final ok = await auth.signup(
+      email: '',
+      phone: phone,
+      password: 'OTP_USER_${DateTime.now().millisecondsSinceEpoch}', // random pass for OTP users
+      name: 'New User',
+      userType: widget.role,
+    );
+
     if (!mounted) return;
     setState(() => _isLoading = false);
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => OtpVerificationScreen(
-        role:    widget.role,
-        contact: '$_countryCode $phone',
-        isEmail: false,
-      ),
-    ));
+
+    if (ok) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => OtpVerificationScreen(
+          role:    widget.role,
+          contact: phone,
+          isEmail: false,
+        ),
+      ));
+    } else {
+      _showSnack(auth.error ?? 'Signup failed. Please try again.');
+    }
   }
 
   // ── Proceed with email → OTP ──────────────────────────────
   Future<void> _sendEmailOtp() async {
     final name  = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
+    final pass  = _passwordCtrl.text.trim();
+
     if (name.isEmpty) { _showSnack('Please enter your name.'); return; }
     if (email.isEmpty || !email.contains('@')) {
       _showSnack('Please enter a valid email address.');
       return;
     }
+    if (pass.length < 6) {
+      _showSnack('Password must be at least 6 characters.');
+      return;
+    }
+
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1));
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final ok = await auth.signup(
+      email: email,
+      password: pass,
+      name: name,
+      userType: widget.role,
+    );
+
     if (!mounted) return;
     setState(() => _isLoading = false);
-    // OTP sent to email
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => OtpVerificationScreen(
-        role:    widget.role,
-        contact: email,
-        isEmail: true,
-      ),
-    ));
+
+    if (ok) {
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => OtpVerificationScreen(
+          role:    widget.role,
+          contact: email,
+          isEmail: true,
+        ),
+      ));
+    } else {
+      _showSnack(auth.error ?? 'Signup failed. Please try again.');
+    }
   }
 
   void _showSnack(String msg) {
@@ -218,7 +253,7 @@ class _SignupScreenState extends State<SignupScreen>
             Expanded(
               child: Center(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(24, 24, 24, pad.bottom + 24),
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, pad.bottom + 16),
                   child: AnimatedBuilder(
                     animation: _cardCtrl,
                     builder: (_, child) => Opacity(
@@ -261,7 +296,7 @@ class _SignupScreenState extends State<SignupScreen>
       // Title
       Text(_isProvider ? 'Join as Provider' : 'Create Account',
           textAlign: TextAlign.center,
-          style: const TextStyle(fontFamily: 'Inter', fontSize: 30,
+          style: const TextStyle(fontFamily: 'Inter', fontSize: 24,
               fontWeight: FontWeight.w800, color: Colors.white,
               letterSpacing: -0.5, height: 1.1)),
       const SizedBox(height: 8),
@@ -324,7 +359,24 @@ class _SignupScreenState extends State<SignupScreen>
         _GlassInput(controller: _emailCtrl, hint: 'you@example.com',
             icon: Icons.mail_outline_rounded,
             keyboardType: TextInputType.emailAddress),
-        const SizedBox(height: 22),
+        const SizedBox(height: 14),
+        _FormLabel('Password'),
+        const SizedBox(height: 8),
+        _GlassInput(
+          controller: _passwordCtrl,
+          hint: 'Min. 6 characters',
+          icon: Icons.lock_outline_rounded,
+          obscure: _obscure,
+          suffix: GestureDetector(
+            onTap: () => setState(() => _obscure = !_obscure),
+            child: Icon(
+              _obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              color: Colors.white.withOpacity(0.45),
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(height: 26),
         _OtpButton(label: 'Send OTP via Email', loading: _isLoading,
             accent: _accent, onTap: _isLoading ? null : _sendEmailOtp),
       ],
@@ -440,7 +492,7 @@ class _GlassInput extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          height: 56,
+          height: 48,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.09),
             borderRadius: BorderRadius.circular(14),
@@ -491,7 +543,7 @@ class _CountryField extends StatelessWidget {
     return GestureDetector(onTap: onTap, child: ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(height: 56,
+        child: Container(height: 48,
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.09),
             borderRadius: BorderRadius.circular(14),
@@ -524,7 +576,7 @@ class _OtpButton extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        width: double.infinity, height: 58,
+        width: double.infinity, height: 48,
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(loading ? 0.70 : 1.0),
           borderRadius: BorderRadius.circular(99),
@@ -538,9 +590,9 @@ class _OtpButton extends StatelessWidget {
                 strokeWidth: 2.5, color: accent))
             : Row(mainAxisSize: MainAxisSize.min, children: [
           Text(label, style: TextStyle(fontFamily: 'Inter',
-              fontSize: 16, fontWeight: FontWeight.w700, color: accent)),
+              fontSize: 14, fontWeight: FontWeight.w700, color: accent)),
           const SizedBox(width: 6),
-          Icon(Icons.arrow_forward_rounded, color: accent, size: 18),
+          Icon(Icons.arrow_forward_rounded, color: accent, size: 16),
         ])),
       ),
     );
@@ -647,7 +699,7 @@ class _GlassCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(32),
       child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
         child: Container(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
               gradient: LinearGradient(
                   begin: Alignment.topLeft, end: Alignment.bottomRight,

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../providers/auth_provider.dart';
 
+import '../services/provider_service.dart';
+
 // ── Data model ─────────────────────────────────────────────────────
 class Review {
   final String id;
@@ -30,61 +32,74 @@ class Review {
 
 // ── ReviewsNotifier ────────────────────────────────────────────────
 class ReviewsNotifier extends ChangeNotifier {
+  final String providerId;
+  final ProviderService _service = ProviderService();
+
+  bool isLoading = true;
   String _sort = 'Recent';
+  List<Review> _reviews = [];
+
   String get sort => _sort;
 
-  final List<Review> _reviews = [
-    Review(
-      id: '1',
-      authorName: 'Alex Johnson',
-      initials: 'AJ',
-      avatarColor: const Color(0xFF0DB8A9),
-      stars: 5,
-      body: 'Absolutely fantastic service! The provider was professional and on time. Highly recommend to everyone in the area.',
-      timeAgo: '2 days ago',
-      likes: 12,
-    ),
-    Review(
-      id: '2',
-      authorName: 'Sarah Miller',
-      initials: 'SM',
-      avatarColor: const Color(0xFF3B82F6),
-      stars: 4,
-      body: 'Great experience overall. The booking process was smooth, though the arrival was 5 minutes late.',
-      timeAgo: '1 week ago',
-      likes: 8,
-    ),
-    Review(
-      id: '3',
-      authorName: 'Michael Chen',
-      initials: 'MC',
-      avatarColor: const Color(0xFF8B5CF6),
-      stars: 5,
-      body: 'Perfect execution. Exceeded my expectations in every way. Will definitely book again through the app.',
-      timeAgo: '2 weeks ago',
-      likes: 5,
-    ),
-    Review(
-      id: '4',
-      authorName: 'Fatima Zahra',
-      initials: 'FZ',
-      avatarColor: const Color(0xFFF97316),
-      stars: 5,
-      body: 'Very professional and caring. I felt comfortable throughout the entire session. Will come back!',
-      timeAgo: '3 weeks ago',
-      likes: 19,
-    ),
-    Review(
-      id: '5',
-      authorName: 'Karim Benali',
-      initials: 'KB',
-      avatarColor: const Color(0xFF10B981),
-      stars: 4,
-      body: 'Good service, clean environment. Staff was friendly and helpful. Overall a positive experience.',
-      timeAgo: '1 month ago',
-      likes: 3,
-    ),
-  ];
+  ReviewsNotifier(this.providerId) {
+    _fetchReviews();
+  }
+
+  Future<void> _fetchReviews() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final data = await _service.getProviderReviews(providerId);
+      final palette = [
+        AppColors.primary,
+        const Color(0xFF3B82F6),
+        const Color(0xFFF97316),
+        const Color(0xFF8B5CF6),
+        const Color(0xFF10B981),
+      ];
+
+      _reviews = data.asMap().entries.map((entry) {
+        final i = entry.key;
+        final json = entry.value;
+        final client = json['client'] ?? {};
+        final fName = client['firstName']?.toString() ?? '';
+        final lName = client['lastName']?.toString() ?? '';
+        final nameStr = '$fName $lName'.trim();
+        final display = nameStr.isEmpty ? 'Anonymous' : nameStr;
+
+        final initials = display
+            .split(' ')
+            .where((w) => w.isNotEmpty)
+            .take(2)
+            .map((w) => w[0].toUpperCase())
+            .join();
+
+        final date = DateTime.parse(json['createdAt'] ?? DateTime.now().toIso8601String());
+
+        return Review(
+          id: json['id']?.toString() ?? i.toString(),
+          authorName: display,
+          initials: initials.isEmpty ? 'U' : initials,
+          avatarColor: palette[i % palette.length],
+          stars: (json['rating'] as num?)?.toInt() ?? 0,
+          body: json['comment']?.toString() ?? '',
+          timeAgo: _timeAgo(date),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('Failed to fetch reviews: $e');
+    }
+    isLoading = false;
+    notifyListeners();
+  }
+
+  static String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays} days ago';
+    if (diff.inHours > 0) return '${diff.inHours} hours ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} mins ago';
+    return 'Just now';
+  }
 
   List<Review> get reviews {
     final list = List<Review>.from(_reviews);
@@ -93,14 +108,12 @@ class ReviewsNotifier extends ChangeNotifier {
     } else if (_sort == 'Most Liked') {
       list.sort((a, b) => b.likes.compareTo(a.likes));
     }
-    // 'Recent' keeps insertion order (newest first)
     return list;
   }
 
   double get avgRating {
     if (_reviews.isEmpty) return 0;
-    return _reviews.map((r) => r.stars).reduce((a, b) => a + b) /
-        _reviews.length;
+    return _reviews.map((r) => r.stars).reduce((a, b) => a + b) / _reviews.length;
   }
 
   int get total => _reviews.length;
@@ -128,36 +141,21 @@ class ReviewsNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addReview(String name, int stars, String body) {
-    final initials = name
-        .trim()
-        .split(' ')
-        .where((w) => w.isNotEmpty)
-        .take(2)
-        .map((w) => w[0].toUpperCase())
-        .join();
-    final palette = [
-      AppColors.primary,
-      const Color(0xFF3B82F6),
-      const Color(0xFFF97316),
-      const Color(0xFF8B5CF6),
-      const Color(0xFF10B981),
-    ];
-    _reviews.insert(
-      0,
-      Review(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        authorName: name,
-        initials: initials.isEmpty ? '?' : initials,
-        avatarColor: palette[_reviews.length % palette.length],
-        stars: stars,
-        body: body,
-        timeAgo: 'Just now',
-      ),
-    );
-    notifyListeners();
+  Future<bool> addReview(String name, int stars, String body) async {
+    try {
+      await _service.submitReview(
+        providerProfileId: providerId,
+        rating: stars.toDouble(),
+        comment: body,
+      );
+      await _fetchReviews();
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 }
+
 
 // ── Screen ─────────────────────────────────────────────────────────
 class ReviewsScreen extends StatelessWidget {
@@ -173,7 +171,7 @@ class ReviewsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ReviewsNotifier(),
+      create: (_) => ReviewsNotifier(providerId),
       child: _Body(providerName: providerName),
     );
   }
@@ -216,42 +214,55 @@ class _Body extends StatelessWidget {
         builder: (ctx, rn, _) => Stack(
           children: [
             // ── Scrollable content ───────────────────────────
-            ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
-              children: [
-                _SummaryCard(rn: rn),
-                const SizedBox(height: 22),
-                // Header row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('User Testimonials',
-                        style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark)),
-                    _SortButton(rn: rn),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                ...rn.reviews.map((r) => _ReviewCard(
-                  r: r,
-                  onLike: () => rn.toggleLike(r.id),
-                  onReport: () => ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(
-                      content: const Text(
-                          'Review reported. Thank you!',
-                          style: TextStyle(fontFamily: 'Inter')),
-                      backgroundColor: AppColors.textMuted,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
+            rn.isLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                    children: [
+                      _SummaryCard(rn: rn),
+                      const SizedBox(height: 22),
+                      // Header row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('User Testimonials',
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textDark)),
+                          _SortButton(rn: rn),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (rn.reviews.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Text('No reviews yet. Be the first!',
+                                style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: AppColors.textMuted)),
+                          ),
+                        )
+                      else
+                        ...rn.reviews.map((r) => _ReviewCard(
+                              r: r,
+                              onLike: () => rn.toggleLike(r.id),
+                              onReport: () => ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(
+                                  content: const Text(
+                                      'Review reported. Thank you!',
+                                      style: TextStyle(fontFamily: 'Inter')),
+                                  backgroundColor: AppColors.textMuted,
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12)),
+                                ),
+                              ),
+                            )),
+                    ],
                   ),
-                )),
-              ],
-            ),
 
             // ── Write a Review sticky CTA ────────────────────
             Positioned(
@@ -399,7 +410,7 @@ class _Body extends StatelessWidget {
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       final name = nameCtrl.text.trim();
                       final body = bodyCtrl.text.trim();
                       if (name.isEmpty || body.isEmpty) {
@@ -412,23 +423,45 @@ class _Body extends StatelessWidget {
                         ));
                         return;
                       }
-                      rn.addReview(name, pickedStars, body);
-                      Navigator.pop(sheet);
+
+                      // Show loading state
                       ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                        content: const Row(children: [
-                          Icon(Icons.check_circle,
-                              color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text('Review submitted! Thank you.',
-                              style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontWeight: FontWeight.w600)),
-                        ]),
-                        backgroundColor: AppColors.success,
+                        content: const Text('Submitting review...'),
+                        backgroundColor: AppColors.textMuted,
+                        duration: const Duration(seconds: 1),
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ));
+
+                      final success = await rn.addReview(name, pickedStars, body);
+
+                      if (success && ctx.mounted) {
+                        Navigator.pop(sheet); // close bottom sheet
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                          content: const Row(children: [
+                            Icon(Icons.check_circle,
+                                color: Colors.white, size: 18),
+                            SizedBox(width: 8),
+                            Text('Review submitted! Thank you.',
+                                style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w600)),
+                          ]),
+                          backgroundColor: AppColors.success,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ));
+                      } else if (!success && ctx.mounted) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                          content: const Text('Failed to submit review. Try checking if you have completed bookings with this provider.'),
+                          backgroundColor: AppColors.error,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ));
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,

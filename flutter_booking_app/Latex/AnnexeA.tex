@@ -1,0 +1,116 @@
+\chapter{Schéma de la base de données}
+
+\section{Modèle Entité-Relation}
+
+Cette annexe présente les détails complets du schéma de la base de données HayaBook tel que défini dans le fichier \texttt{prisma/schema.prisma}. Ce schéma est utilisé par l'ORM Prisma pour générer automatiquement le client TypeScript typé permettant d'interagir avec la base de données PostgreSQL.
+
+\subsection{Modèle \texttt{User}}
+
+Le modèle \texttt{User} est la table centrale du système. Il représente tous les acteurs de la plateforme (clients, prestataires et administrateurs).
+
+\begin{lstlisting}[language=SQL, caption={Champs principaux du modèle User (Prisma Schema)}]
+model User {
+  id                String           @id @default(uuid())
+  email             String?          @unique
+  phone             String?          @unique
+  passwordHash      String
+  firstName         String?
+  lastName          String?
+  bio               String?
+  role              Role             @default(CLIENT)
+  profileImage      String?
+  isActive          Boolean          @default(true)
+  isVerified        Boolean          @default(false)
+  isProfileComplete Boolean          @default(false)
+  isSuspended       Boolean          @default(false)
+  suspensionReason  String?
+  deletedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+\end{lstlisting}
+
+\subsection{Modèle \texttt{Booking}}
+
+Le modèle \texttt{Booking} enregistre chaque réservation avec ses références aux entités liées et son statut dans le cycle de vie.
+
+\begin{lstlisting}[language=SQL, caption={Champs principaux du modèle Booking (Prisma Schema)}]
+model Booking {
+  id                String        @id @default(uuid())
+  clientId          String
+  providerProfileId String
+  serviceId         String
+  serviceOptionId   String?
+  date              DateTime
+  startTime         String
+  endTime           String
+  durationMinutes   Int
+  status            BookingStatus @default(CONFIRMED)
+  price             Float
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_CLIENT
+  CANCELLED_BY_PROVIDER
+  NO_SHOW
+}
+\end{lstlisting}
+
+\subsection{Relations entre les modèles}
+
+Les principales relations entre les modèles sont :
+
+\begin{itemize}
+    \item \texttt{User} $\rightarrow$ \texttt{ProviderProfile} : Relation 1:1. Un utilisateur de rôle \texttt{PROVIDER} possède un seul profil prestataire.
+    \item \texttt{ProviderProfile} $\rightarrow$ \texttt{Service} : Relation 1:N. Un prestataire peut proposer plusieurs services.
+    \item \texttt{Service} $\rightarrow$ \texttt{ServiceOption} : Relation 1:N. Un service peut avoir plusieurs variantes tarifaires.
+    \item \texttt{User} $\rightarrow$ \texttt{Booking} (clientBookings) : Relation 1:N. Un client peut avoir plusieurs réservations.
+    \item \texttt{ProviderProfile} $\rightarrow$ \texttt{Booking} : Relation 1:N. Un prestataire peut recevoir plusieurs réservations.
+    \item \texttt{Booking} $\rightarrow$ \texttt{Review} : Relation 1:1. Une réservation complétée peut donner lieu à un seul avis.
+\end{itemize}
+
+\section{Endpoints de l'API REST}
+
+Le tableau suivant liste les principaux endpoints exposés par le serveur HayaBook.
+
+\begin{table}[h]
+\centering
+\caption{Endpoints principaux de l'API REST HayaBook.}
+\label{tab:endpoints}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Méthode} & \textbf{Endpoint} & \textbf{Accès} & \textbf{Description} \\
+\hline
+POST & \texttt{/api/auth/register} & Public & Inscription d'un utilisateur \\
+\hline
+POST & \texttt{/api/auth/login} & Public & Connexion \\
+\hline
+POST & \texttt{/api/auth/verify-otp} & Public & Vérification OTP \\
+\hline
+PATCH & \texttt{/api/auth/profile} & Auth & Mise à jour du profil \\
+\hline
+GET & \texttt{/api/providers/all} & Public & Liste des prestataires \\
+\hline
+POST & \texttt{/api/bookings} & Auth & Créer une réservation \\
+\hline
+GET & \texttt{/api/bookings/client} & Auth & Réservations du client \\
+\hline
+PATCH & \texttt{/api/bookings/:id/status} & Auth & Mise à jour de statut \\
+\hline
+POST & \texttt{/api/messages} & Auth & Envoyer un message \\
+\hline
+GET & \texttt{/api/search} & Public & Recherche globale \\
+\hline
+GET & \texttt{/api/admin/stats} & Admin & Statistiques plateforme \\
+\hline
+DELETE & \texttt{/api/admin/users/:id} & Admin & Suppression douce \\
+\hline
+\end{tabular}
+\end{table}

@@ -1,5 +1,4 @@
 // lib/screens/profile_screen.dart
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,8 +6,10 @@ import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../providers/auth_provider.dart';
 import '../providers/booking_provider.dart';
+import '../providers/favorites_provider.dart';
 import '../widgets/bottom_nav_bar.dart';
 import '../widgets/glass_kit.dart';
+import '../widgets/haya_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({Key? key}) : super(key: key);
@@ -42,6 +43,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     _cardSlide = Tween<double>(begin: 32.0, end: 0.0).animate(
         CurvedAnimation(parent: _cardCtrl, curve: Curves.easeOutCubic));
     _cardCtrl.forward();
+
+    // Fetch user bookings for stats
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<BookingProvider>(context, listen: false).fetchUserBookings();
+    });
   }
 
   @override
@@ -49,8 +55,8 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<AuthProvider, BookingProvider>(
-      builder: (_, auth, bp, __) {
+    return Consumer3<AuthProvider, BookingProvider, FavoritesProvider>(
+      builder: (_, auth, bp, fp, __) {
         final name      = auth.userName ?? 'User';
         final photoPath = auth.photoPath; // ← from AuthProvider
 
@@ -58,10 +64,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         final totalBookings    = bp.bookings.length;
         final upcomingBookings = bp.getUpcomingBookings().length;
 
-        // Favorites count — read from BookingProvider favorites list
-        // Falls back to 0 if no favorites property exists yet
-        int totalFavorites = 0;
-        try { totalFavorites = bp.favorites?.length ?? 0; } catch (_) {}
+        // Favorites count — read from FavoritesProvider
+        int totalFavorites = fp.favorites.length;
 
         return AnnotatedRegion<SystemUiOverlayStyle>(
           value: const SystemUiOverlayStyle(
@@ -110,49 +114,32 @@ class _ProfileScreenState extends State<ProfileScreen>
                           child: Column(children: [
 
                             // Top bar
-                            Row(
+                            const Row(
                               mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                              MainAxisAlignment.center,
                               children: [
-                                GestureDetector(
-                                  onTap: () => Navigator.pop(context),
-                                  child: const Icon(Icons.arrow_back_ios,
-                                      color: Colors.white, size: 20),
-                                ),
-                                const Text('Profile', style: TextStyle(
+                                Text('Profile', style: TextStyle(
                                   fontFamily:  'Inter', fontSize: 18,
                                   fontWeight:  FontWeight.w700,
                                   color:       Colors.white,
                                 )),
-                                const Icon(Icons.more_horiz,
-                                    color: Colors.white, size: 22),
                               ],
                             ),
                             const SizedBox(height: 24),
 
-                            // ── Avatar — real photo if set ────
+                            // ── Avatar — Global HayaAvatar System ────
                             Stack(children: [
                               Container(
-                                width: 100, height: 100,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                       color: Colors.white.withOpacity(0.45),
                                       width: 3),
                                 ),
-                                child: ClipOval(
-                                  child: photoPath != null
-                                  // Real picked photo
-                                      ? Image.file(
-                                    File(photoPath),
-                                    fit:    BoxFit.cover,
-                                    width:  100,
-                                    height: 100,
-                                    errorBuilder: (_, __, ___) =>
-                                        _defaultAvatar(name),
-                                  )
-                                  // Default initials avatar
-                                      : _defaultAvatar(name),
+                                child: HayaAvatar(
+                                  avatarUrl: photoPath,
+                                  size: 100,
+                                  borderRadius: 99, // Circular for profile
                                 ),
                               ),
                               // Edit badge
@@ -335,11 +322,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                           FadeSlide(
                             delay: const Duration(milliseconds: 140),
                             child: _glassSection([
-                              _rowArrow(Icons.payments_outlined,
-                                  'Payment Methods',
-                                  onTap: () => Navigator.pushNamed(
-                                      context, '/add-card')),
-                              _divider(),
                               _rowArrow(Icons.verified_user_outlined,
                                   'Privacy Policy',
                                   onTap: () => Navigator.pushNamed(
@@ -420,17 +402,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // ── Avatar fallback — initials on purple ─────────────────────
-  Widget _defaultAvatar(String name) {
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
-    return Container(
-      color: Colors.white.withOpacity(0.25),
-      child: Center(child: Text(initial, style: const TextStyle(
-        fontFamily: 'Inter', fontSize: 38,
-        fontWeight: FontWeight.w700, color: Colors.white,
-      ))),
-    );
-  }
 
   Widget _statItem({
     required String value,

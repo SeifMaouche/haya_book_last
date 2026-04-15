@@ -39,37 +39,24 @@ class _ProviderScheduleScreenState extends State<ProviderScheduleScreen> {
   ];
   static const _weekLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-  // Mock appointments for selected day
-  final List<Map<String, dynamic>> _appointments = [
-    {
-      'title': 'Full Glam Transformation',
-      'client': 'Aria Montgomery',
-      'time': '08:30',
-      'hour': 8,
-      'duration': 1,
-      'priority': false,
-      'active': false,
-    },
-    {
-      'title': 'Signature Hair Styling',
-      'client': 'Sarah Jenkins',
-      'time': '09:45',
-      'hour': 9,
-      'duration': 2,
-      'priority': true,
-      'active': true,
-    },
-    {
-      'title': 'Bridal Trial Package',
-      'client': 'David Chen',
-      'time': '12:15',
-      'hour': 11,
-      'duration': 1,
-      'priority': false,
-      'active': false,
-      'online': true,
-    },
-  ];
+  // We will now compute appointments dynamically from ProviderStateProvider
+  
+  double _timeStringToHour(String timeStr) {
+    try {
+      final parts = timeStr.toLowerCase().split(' ');
+      final hm = parts[0].split(':');
+      double hour = double.parse(hm[0]);
+      final minute = double.parse(hm[1]) / 60.0;
+      
+      if (parts.length > 1) {
+        if (parts[1] == 'pm' && hour != 12) hour += 12;
+        if (parts[1] == 'am' && hour == 12) hour = 0;
+      }
+      return hour + minute;
+    } catch (e) {
+      return 8.0; // Fallback
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,24 +294,30 @@ class _ProviderScheduleScreenState extends State<ProviderScheduleScreen> {
                       .toList(),
                 ),
 
-                // Appointments
-                ..._appointments.map((appt) {
-                  final topOffset =
-                      (appt['hour'] - 8) * rowH + 6.0;
-                  final height = appt['duration'] * rowH - 12.0;
+                // Appointments from ProviderStateProvider
+                ...ps.bookings.where((b) {
+                  return b.bookingDate.year == _selectedDate.year &&
+                         b.bookingDate.month == _selectedDate.month &&
+                         b.bookingDate.day == _selectedDate.day &&
+                         b.status != ProviderBookingStatus.cancelled;
+                }).map((appt) {
+                  final hourVal = _timeStringToHour(appt.timeSlot);
+                  final topOffset = (hourVal - 8) * rowH + 6.0;
+                  // Assume 1 hour duration if not specified, or could be dynamic
+                  final height = 1.0 * rowH - 12.0; 
 
                   return Positioned(
                     top: topOffset,
                     left: 4,
                     right: 0,
                     child: _AppointmentBlock(
-                      title: appt['title'],
-                      client: appt['client'],
-                      time: appt['time'],
+                      title: appt.serviceName,
+                      client: appt.clientName,
+                      time: appt.timeSlot,
                       height: height,
-                      isPriority: appt['priority'] ?? false,
-                      isActive: appt['active'] ?? false,
-                      isOnline: appt['online'] ?? false,
+                      isPriority: false, // Could be based on a field
+                      isActive: appt.status == ProviderBookingStatus.completed,
+                      isOnline: false,
                     ),
                   );
                 }).toList(),
@@ -359,54 +352,78 @@ class _ProviderScheduleScreenState extends State<ProviderScheduleScreen> {
   }
 
   Widget _buildBottomActions() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6D28D9).withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          )
+        ],
+      ),
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 54,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.5)),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2))
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.block_rounded, color: AppColors.primary, size: 20),
-                  SizedBox(width: 8),
-                  Text('Block Time',
-                      style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary)),
-                ],
+            child: GestureDetector(
+              onTap: () => Navigator.pushNamed(context, '/provider/availability'),
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.block_rounded, color: Color(0xFF4B5563), size: 18),
+                    SizedBox(width: 8),
+                    Text('Block Time',
+                        style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF4B5563))),
+                  ],
+                ),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 54, height: 54,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF8B5CF6), Color(0xFF4C1D95)]),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                    color: AppColors.primary.withOpacity(0.4),
+          GestureDetector(
+            onTap: () => Navigator.pushNamed(context, '/provider/add-service'),
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)]),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6D28D9).withOpacity(0.3),
                     blurRadius: 12,
-                    offset: const Offset(0, 4))
-              ],
+                    offset: const Offset(0, 4),
+                  )
+                ],
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text('New',
+                      style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white)),
+                ],
+              ),
             ),
-            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
           ),
         ],
       ),

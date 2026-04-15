@@ -1,0 +1,156 @@
+\chapter{Implémentation et Résultats}
+
+\section{Introduction}
+
+Ce chapitre présente les détails d'implémentation des principaux composants de la plateforme HayaBook. Nous décrivons successivement le backend Node.js, l'application mobile Flutter et le tableau de bord d'administration React, en illustrant les fonctions clés de chaque composant.
+
+\section{Implémentation du backend}
+
+\subsection{Point d'entrée du serveur (\texttt{server.ts})}
+
+Le fichier \texttt{src/server.ts} constitue le point d'entrée du backend. Il instancie le serveur Express, configure Socket.io, enregistre tous les modules de routes et démarre le worker de réservation. Le serveur écoute sur le port 5000.
+
+Les événements Socket.io gérés par le serveur sont les suivants :
+\begin{itemize}
+    \item \texttt{join\_user} : Le client rejoint sa salle personnelle identifiée par son \texttt{userId} pour recevoir ses notifications.
+    \item \texttt{join\_conversation} : Le client rejoint une salle de conversation identifiée par le \texttt{conversationId}.
+    \item \texttt{disconnect} : Journalisation de la déconnexion.
+\end{itemize}
+
+\subsection{Middlewares}
+
+Le backend utilise trois middlewares personnalisés :
+
+\begin{itemize}
+    \item \textbf{\texttt{authMiddleware}} : Extrait et vérifie le jeton JWT depuis l'en-tête \texttt{Authorization}. Re-interroge toujours la base de données pour vérifier que l'utilisateur est actif (\texttt{isActive}), empêchant ainsi les utilisateurs suspendus d'utiliser d'anciens jetons valides.
+    \item \textbf{\texttt{adminMiddleware}} : Vérifie que \texttt{req.user.role === 'ADMIN'}. Retourne une erreur 403 si ce n'est pas le cas.
+    \item \textbf{Middleware d'upload (Multer)} : Gère le stockage des fichiers dans \texttt{public/uploads/}, avec une limite de 5 Mo et une validation du type MIME (jpeg, jpg, png, webp).
+\end{itemize}
+
+\subsection{Contrôleur d'authentification (\texttt{auth.controller.ts})}
+
+Le contrôleur d'authentification expose les fonctions suivantes :
+
+\begin{itemize}
+    \item \textbf{\texttt{register}} : Crée un nouvel utilisateur, hache son mot de passe avec bcrypt (facteur de coût 10), génère un OTP à 6 chiffres avec une durée de vie de 10 minutes, l'enregistre dans la table \texttt{Otp} et envoie un email via Nodemailer. La création d'un compte administrateur nécessite la présence de l'en-tête \texttt{x-admin-secret}.
+    \item \textbf{\texttt{verifyOtp}} : Valide le code OTP, marque l'utilisateur comme vérifié (\texttt{isVerified = true}), supprime l'enregistrement OTP et retourne un JWT d'une durée de 7 jours.
+    \item \textbf{\texttt{login}} : Recherche l'utilisateur par email ou téléphone, compare le mot de passe avec bcrypt et vérifie successivement les drapeaux \texttt{isVerified}, \texttt{deletedAt}, \texttt{isSuspended} et \texttt{isActive}.
+    \item \textbf{\texttt{updateProfile}} : Met à jour les données personnelles de l'utilisateur, gère l'upload d'une photo de profil et rehache le mot de passe si fourni.
+\end{itemize}
+
+\subsection{Contrôleur de réservations (\texttt{booking.controller.ts})}
+
+Ce contrôleur gère le cycle de vie complet des réservations :
+
+\begin{itemize}
+    \item \textbf{\texttt{createBooking}} : Résout le prix et la durée depuis le service ou l'option de service sélectionné, vérifie l'absence de chevauchement via une transaction Prisma atomique (\texttt{\$transaction}), crée la réservation et émet l'événement \texttt{booking\_update} via Socket.io aux deux partis.
+    \item \textbf{\texttt{getAvailableSlots}} : Retourne les créneaux déjà occupés pour un prestataire à une date donnée. Utilise une fenêtre ±12 heures autour de la date en UTC pour gérer les décalages horaires.
+    \item \textbf{\texttt{updateBookingStatus}} : Applique des gardes basées sur le rôle de l'appelant (client ou prestataire) pour valider les transitions de statut autorisées.
+    \item \textbf{\texttt{rescheduleBooking}} : Recalcule l'heure de fin, vérifie l'absence de chevauchement (en excluant la réservation originale) et met à jour la date et l'heure.
+\end{itemize}
+
+\subsection{Contrôleur des prestataires (\texttt{provider.controller.ts})}
+
+Ce contrôleur expose notamment :
+
+\begin{itemize}
+    \item \textbf{\texttt{getAllProviders}} : Applique les filtres de catégorie et de note en base de données, puis calcule la distance via la formule de Haversine en mémoire et filtre par distance maximale si spécifiée.
+    \item \textbf{\texttt{getProviderStats}} : Exécute 5 requêtes parallèles pour calculer les statistiques du tableau de bord prestataire (réservations du jour, revenus totaux, note moyenne).
+    \item \textbf{\texttt{updateProviderProfile}} : Utilise une transaction Prisma pour mettre à jour simultanément \texttt{ProviderProfile} et \texttt{User} en garantissant la cohérence des données.
+\end{itemize}
+
+\subsection{Service de messagerie (\texttt{message.controller.ts})}
+
+\begin{itemize}
+    \item Le \texttt{conversationId} est généré de manière déterministe par \texttt{[uid1, uid2].sort().join('\_')}, garantissant que les deux utilisateurs partagent toujours la même salle de conversation quelle que soit la direction d'initiation.
+    \item \textbf{\texttt{sendMessage}} : Crée le message en base de données et émet l'événement \texttt{new\_message} dans la salle de conversation via Socket.io.
+    \item \textbf{\texttt{getConversation}} : Récupère les messages et marque les messages reçus comme lus (\texttt{isRead = true}).
+\end{itemize}
+
+\subsection{Service d'administration (\texttt{admin.controller.ts})}
+
+Le contrôleur d'administration fournit 15 fonctions, dont :
+
+\begin{itemize}
+    \item \textbf{\texttt{softDeleteUser}} : Anonymise les données personnelles de l'utilisateur (nom, email remplacés par des valeurs génériques, \texttt{deletedAt} défini) tout en préservant l'historique des réservations pour des raisons d'audit.
+    \item \textbf{\texttt{softDeleteProvider}} : Localise le \texttt{User} associé au profil prestataire et applique la même procédure d'anonymisation.
+    \item \textbf{\texttt{getMonthlyRevenue}} : Agrège les réservations complétées par mois pour alimenter le graphique de revenus du tableau de bord.
+    \item \textbf{\texttt{replyToSupportMessage}} : Enregistre la réponse de l'administrateur et crée une notification in-app pour l'utilisateur concerné.
+\end{itemize}
+
+\section{Implémentation de l'application Flutter}
+
+\subsection{Point d'entrée (\texttt{main.dart})}
+
+Le widget racine \texttt{HayaBookApp} enregistre neuf providers via \texttt{MultiProvider} : \texttt{AuthProvider}, \texttt{BookingProvider}, \texttt{FavoritesProvider}, \texttt{LocaleProvider}, \texttt{ProviderStateProvider}, \texttt{ChatProvider}, \texttt{ProviderProfileProvider} et \texttt{NotificationProvider}. Un \textit{callback} post-frame initialise les connexions Socket.io et charge les données initiales si l'utilisateur est déjà authentifié. La fonction \texttt{\_attachNotificationListener} écoute l'événement \texttt{notification\_received} de Socket.io et affiche une \texttt{SnackBar} flottante avec le fond violet caractéristique de HayaBook.
+
+\subsection{Client HTTP (\texttt{ApiClient})}
+
+La classe \texttt{ApiClient} encapsule un client \textbf{Dio} configuré avec l'URL de base, un délai d'expiration de 10 secondes et deux intercepteurs :
+\begin{itemize}
+    \item \textbf{Intercepteur de requête} : Lit le JWT depuis \texttt{FlutterSecureStorage} et l'ajoute à l'en-tête \texttt{Authorization}.
+    \item \textbf{Intercepteur d'erreur} : En cas de réponse 401, déclenche \texttt{AuthProvider.logout()} via la clé de navigation globale \texttt{navigatorKey} et redirige vers l'écran de connexion.
+\end{itemize}
+
+\subsection{Gestion des réservations (\texttt{BookingProvider})}
+
+Le \texttt{BookingProvider} gère la logique complexe de génération des créneaux disponibles :
+
+\begin{enumerate}
+    \item Récupération des fenêtres occupées depuis le backend (\texttt{GET /api/bookings/slots}).
+    \item Expansion de ces fenêtres en blocs de 30 minutes (\textit{busyChunks}).
+    \item Génération des créneaux disponibles en respectant :
+    \begin{enumerate}
+        \item Les horaires d'ouverture du prestataire pour le jour sélectionné.
+        \item L'élimination des créneaux dans le passé (avec une marge de 15 minutes pour les réservations du jour même).
+        \item La vérification que la durée complète du service (en blocs de 30 min) est disponible sans interruption.
+    \end{enumerate}
+\end{enumerate}
+
+Le provider implémente également un mécanisme anti-conditions de course via un compteur \texttt{\_lastRequestId}, qui invalide les réponses de requêtes périmées lors de changements rapides de filtres.
+
+\subsection{Portail prestataire (\texttt{ProviderStateProvider})}
+
+Ce provider centralise tout l'état du tableau de bord prestataire. La méthode \texttt{loadInitialData()} exécute en parallèle quatre requêtes (réservations, statistiques, disponibilités et profil) via \texttt{Future.wait}, chacune avec un gestionnaire d'erreur individuel (\texttt{catchError}) pour éviter qu'une défaillance partielle ne bloque le chargement complet. Les réservations reçues du backend (de type \texttt{Booking}) sont converties en \texttt{ProviderBooking} avec une traduction du statut string vers l'énumération \texttt{ProviderBookingStatus}.
+
+\section{Implémentation du tableau de bord d'administration}
+
+\subsection{Structure générale}
+
+Le tableau de bord est une application React (Vite) structurée autour de React Router v7 avec un composant de garde d'authentification \texttt{RequireAuth} qui vérifie la présence du jeton \texttt{admin\_token} dans \texttt{localStorage}.
+
+\subsection{Page de bord principale (\texttt{Dashboard.tsx})}
+
+La page principale affiche :
+\begin{itemize}
+    \item Quatre cartes de statistiques (utilisateurs, prestataires, réservations du jour, revenus) auto-rechargées toutes les 30 secondes via React Query.
+    \item Un graphique en courbes (\texttt{LineChart} de Recharts) pour les revenus mensuels.
+    \item Un graphique circulaire (\texttt{PieChart}) pour la distribution des catégories de prestataires.
+    \item Un tableau des 7 dernières réservations avec code couleur par statut.
+\end{itemize}
+
+\subsection{Gestion des utilisateurs (\texttt{Users.tsx})}
+
+Cette page permet à l'administrateur de :
+\begin{itemize}
+    \item Rechercher des utilisateurs par nom ou email.
+    \item Activer, suspendre ou supprimer de manière douce (\textit{soft delete}) un compte utilisateur.
+    \item Accéder à un panneau détaillé (\texttt{UserDetailsModal}) affichant les statistiques complètes (dépenses totales, revenus générés, nombre de réservations).
+\end{itemize}
+
+\section{Tests et validation}
+
+La validation du système a été réalisée par des tests fonctionnels manuels couvrant les scénarios suivants :
+
+\begin{itemize}
+    \item Inscription d'un client avec vérification OTP et complétion du profil.
+    \item Inscription d'un prestataire avec configuration des services, de la disponibilité et du portefeuille d'images.
+    \item Création d'une réservation par un client, acceptation et complétion par le prestataire.
+    \item Annulation d'une réservation et vérification de la notification en temps réel.
+    \item Suppression douce d'un utilisateur par l'administrateur avec vérification de la préservation des données historiques.
+    \item Transition automatique de statuts par le worker (\texttt{CONFIRMED} $\rightarrow$ \texttt{IN\_PROGRESS} $\rightarrow$ \texttt{COMPLETED}).
+\end{itemize}
+
+\section{Conclusion}
+
+Ce chapitre a détaillé l'implémentation des composants clés de la plateforme HayaBook. On observe que l'utilisation combinée de TypeScript, Prisma et des transactions atomiques garantit la cohérence des données, tandis que Socket.io assure une expérience utilisateur réactive et synchronisée entre tous les acteurs de la plateforme. Le chapitre suivant conclut ce rapport en résumant les contributions du projet et en proposant des pistes d'amélioration.

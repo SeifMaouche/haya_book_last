@@ -1,0 +1,101 @@
+\chapter{Structure du projet et technologies utilisées}
+
+\section{Organisation des répertoires}
+
+Cette annexe présente la structure des répertoires du projet HayaBook ainsi qu'un récapitulatif des bibliothèques et frameworks utilisés dans chaque sous-projet.
+
+\subsection{Structure générale}
+
+Le projet est organisé en trois sous-projets principaux dans un seul dépôt :
+
+\begin{lstlisting}[caption={Arborescence générale du projet HayaBook}]
+flutter_booking_app/
+|-- lib/                      # Application Flutter
+|   |-- config/               # Configuration (URL, theme, localisation)
+|   |-- models/               # Modeles de donnees
+|   |-- providers/            # Gestion d'etat (ChangeNotifier)
+|   |-- routes/               # Routeur nomme
+|   |-- screens/              # Ecrans (client + prestataire)
+|   |-- services/             # Clients HTTP et Socket
+|   `-- widgets/              # Composants reutilisables
+|-- hayabook-backend/         # Backend Node.js
+|   |-- prisma/               # Schema et migrations
+|   |-- src/
+|   |   |-- controllers/      # Logique metier des routes
+|   |   |-- middlewares/      # Auth, Admin, Upload
+|   |   |-- routes/           # Modules de routes Express
+|   |   |-- services/         # Services annexes (email, worker)
+|   |   `-- server.ts         # Point d'entree
+|   `-- public/uploads/       # Fichiers uploades
+|-- hayabook-admin/           # Tableau de bord React
+|   `-- src/
+|       |-- api/              # Clients Axios
+|       |-- components/       # Composants reutilisables
+|       |-- layouts/          # Mise en page principale
+|       `-- pages/            # Pages du dashboard
+`-- Latex/                    # Ce rapport
+\end{lstlisting}
+
+\section{Tableau récapitulatif des technologies}
+
+\begin{table}[h]
+\centering
+\caption{Technologies utilisées dans le projet HayaBook.}
+\label{tab:tech}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Composant} & \textbf{Technologie} & \textbf{Version} \\
+\hline
+\multirow{5}{*}{Application mobile} & Flutter (Dart) & SDK $\geq$ 3.0.0 \\
+ & Provider & 6.0.0 \\
+ & Dio & 5.3.1 \\
+ & Socket.io Client (Dart) & 2.0.3 \\
+ & flutter\_secure\_storage & 9.0.0 \\
+\hline
+\multirow{6}{*}{Backend} & Node.js + TypeScript & 6.0.2 \\
+ & Express.js & 5.2.1 \\
+ & Prisma ORM & 5.22.0 \\
+ & PostgreSQL & -- \\
+ & Socket.io & 4.8.3 \\
+ & bcryptjs + jsonwebtoken & -- \\
+\hline
+\multirow{5}{*}{Tableau de bord} & React + TypeScript & 19.2.4 \\
+ & Vite & 5.4.11 \\
+ & React Query (TanStack) & 5.96.2 \\
+ & Recharts & 3.8.1 \\
+ & Tailwind CSS & 4.2.2 \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Variables d'environnement du backend}
+
+Le backend nécessite les variables d'environnement suivantes, définies dans un fichier \texttt{.env} :
+
+\begin{lstlisting}[caption={Variables d'environnement du backend HayaBook (.env)}]
+DATABASE_URL="postgresql://user:password@localhost:5432/hayabook"
+JWT_SECRET="votre_cle_secrete_jwt"
+ADMIN_CREATE_SECRET="cle_secrete_creation_admin"
+SMTP_HOST="smtp.mailtrap.io"
+SMTP_PORT=2525
+SMTP_USER="votre_identifiant_smtp"
+SMTP_PASS="votre_mot_de_passe_smtp"
+PORT=5000
+\end{lstlisting}
+
+\section{Commandes de démarrage}
+
+\begin{lstlisting}[language=bash, caption={Commandes pour démarrer les différents composants}]
+# Backend (depuis hayabook-backend/)
+npm install
+npx prisma db push
+npm run dev          # Demarre sur http://localhost:5000
+
+# Application Flutter (depuis la racine)
+flutter pub get
+flutter run
+
+# Tableau de bord (depuis hayabook-admin/)
+npm install
+npm run dev          # Demarre sur http://localhost:5173
+\end{lstlisting}

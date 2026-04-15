@@ -1,3 +1,7 @@
+buildscript {
+    extra.set("kotlin_version", "2.1.0")
+}
+
 plugins {
     id("com.android.application") apply false
     id("com.android.library") apply false

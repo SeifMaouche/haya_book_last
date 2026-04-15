@@ -615,10 +615,10 @@ class _DualCtaButtons extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
-                width: double.infinity, height: 62,
+                width: double.infinity, height: 52,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                       color: Colors.white.withOpacity(0.50), width: 1),
                   boxShadow: [
@@ -630,11 +630,11 @@ class _DualCtaButtons extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.calendar_month_rounded,
-                        color: _kPrimaryDark, size: 20),
-                    SizedBox(width: 10),
+                        color: _kPrimaryDark, size: 18),
+                    SizedBox(width: 8),
                     Text('Book a Service',
                         style: TextStyle(
-                          fontFamily: 'Inter', fontSize: 17,
+                          fontFamily: 'Inter', fontSize: 15,
                           fontWeight: FontWeight.w700, color: _kPrimaryDark,
                         )),
                   ],
@@ -654,10 +654,10 @@ class _DualCtaButtons extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
-                width: double.infinity, height: 62,
+                width: double.infinity, height: 52,
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                       color: Colors.white.withOpacity(0.38), width: 1.5),
                 ),
@@ -665,7 +665,7 @@ class _DualCtaButtons extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      width: 28, height: 28,
+                      width: 24, height: 24,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _kAccent.withOpacity(0.22),
@@ -673,12 +673,12 @@ class _DualCtaButtons extends StatelessWidget {
                             color: _kAccent.withOpacity(0.55), width: 1.2),
                       ),
                       child: const Icon(Icons.store_rounded,
-                          color: Colors.white, size: 15),
+                          color: Colors.white, size: 13),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     const Text('Join as Provider',
                         style: TextStyle(
-                          fontFamily: 'Inter', fontSize: 17,
+                          fontFamily: 'Inter', fontSize: 15,
                           fontWeight: FontWeight.w600, color: Colors.white,
                         )),
                     const SizedBox(width: 6),
@@ -811,21 +811,21 @@ class _TextGlassCard extends StatelessWidget {
       width: double.infinity, radius: 28,
       tintOpacity: 0.12, blurSigma: 20,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(data.title,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontFamily: 'Inter', fontSize: 30, fontWeight: FontWeight.w800,
+                  fontFamily: 'Inter', fontSize: 24, fontWeight: FontWeight.w800,
                   color: Colors.white, letterSpacing: -0.5, height: 1.18,
                 )),
             const SizedBox(height: 12),
             Text(data.subtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: 'Inter', fontSize: 15,
+                  fontFamily: 'Inter', fontSize: 13,
                   color: Colors.white.withOpacity(0.86), height: 1.55,
                 )),
           ],
@@ -872,7 +872,7 @@ class _ArrowCircleButton extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
             child: Container(
-              width: 76, height: 76,
+              width: 60, height: 60,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withOpacity(0.13),
@@ -881,11 +881,11 @@ class _ArrowCircleButton extends StatelessWidget {
               ),
               child: Center(
                 child: Container(
-                  width: 46, height: 46,
+                  width: 38, height: 38,
                   decoration: const BoxDecoration(
                       shape: BoxShape.circle, color: Colors.white),
                   child: const Icon(Icons.arrow_forward,
-                      color: _kPrimary, size: 22),
+                      color: _kPrimary, size: 18),
                 ),
               ),
             ),
@@ -899,7 +899,7 @@ class _ArrowCircleButton extends StatelessWidget {
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
             child: Container(
-              width: 72, height: 72,
+              width: 58, height: 58,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withOpacity(0.15),
@@ -907,7 +907,7 @@ class _ArrowCircleButton extends StatelessWidget {
                     color: Colors.white.withOpacity(0.28), width: 1.5),
               ),
               child: const Icon(Icons.arrow_forward,
-                  color: Colors.white, size: 28),
+                  color: Colors.white, size: 24),
             ),
           ),
         ),

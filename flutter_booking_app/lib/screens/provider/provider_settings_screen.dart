@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/provider_state.dart';
+import '../../providers/auth_provider.dart'; // ✅ needed for logout()
+import '../../widgets/haya_avatar.dart';
+import '../../providers/provider_profile_provider.dart';
 import '../../widgets/provider_bottom_nav_bar.dart';
+
 
 // ─── Design tokens ────────────────────────────────────────────
 const _kPrimary    = Color(0xFF6D28D9);
@@ -13,8 +17,21 @@ const _kTextDark   = Color(0xFF111827);
 const _kTextMuted  = Color(0xFF6B7280);
 const _kTextLight  = Color(0xFF9CA3AF);
 
-class ProviderSettingsScreen extends StatelessWidget {
+class ProviderSettingsScreen extends StatefulWidget {
   const ProviderSettingsScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProviderSettingsScreen> createState() => _ProviderSettingsScreenState();
+}
+
+class _ProviderSettingsScreenState extends State<ProviderSettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProviderProfileProvider>().loadProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,8 +63,8 @@ class ProviderSettingsScreen extends StatelessWidget {
               _StickyHeader(),
               // ── Body ──────────────────────────────────
               Expanded(
-                child: Consumer<ProviderStateProvider>(
-                  builder: (_, ps, __) => SingleChildScrollView(
+                child: Consumer2<ProviderStateProvider, ProviderProfileProvider>(
+                  builder: (_, ps, pp, __) => SingleChildScrollView(
                     padding: EdgeInsets.fromLTRB(
                         16, 24, 16,
                         MediaQuery.of(context).padding.bottom + 110),
@@ -56,7 +73,7 @@ class ProviderSettingsScreen extends StatelessWidget {
                       children: [
 
                         // ── Avatar section ────────────
-                        _AvatarSection(),
+                        _AvatarSection(profile: pp),
                         const SizedBox(height: 32),
 
                         // ── Section label ─────────────
@@ -95,7 +112,8 @@ class ProviderSettingsScreen extends StatelessWidget {
                         _NavRow(
                           icon:  Icons.security_rounded,
                           label: 'Security',
-                          onTap: () {},
+                          onTap: () => Navigator.pushNamed(
+                              context, '/provider/security'),
                         ),
                         const SizedBox(height: 12),
 
@@ -103,7 +121,7 @@ class ProviderSettingsScreen extends StatelessWidget {
                           icon:  Icons.help_rounded,
                           label: 'Help & Support',
                           onTap: () => Navigator.pushNamed(
-                              context, '/help-faq'),
+                              context, '/provider/help-support'),
                         ),
                         const SizedBox(height: 32),
 
@@ -121,7 +139,7 @@ class ProviderSettingsScreen extends StatelessWidget {
         ],
       ),
       bottomNavigationBar:
-      const ProviderBottomNavBar(currentIndex: 3),
+      const ProviderBottomNavBar(currentIndex: 4),
     );
   }
 
@@ -150,10 +168,16 @@ class ProviderSettingsScreen extends StatelessWidget {
                     fontFamily: 'Inter', color: _kTextMuted)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              Navigator.pushNamedAndRemoveUntil(
-                  context, '/login', (_) => false);
+              // ✅ FIX: Call auth.logout() to clear JWT, secure storage,
+              // socket connection, and favorites before navigating.
+              // Previously this just pushed /login without cleaning up.
+              await context.read<AuthProvider>().logout();
+              if (context.mounted) {
+                Navigator.pushNamedAndRemoveUntil(
+                    context, '/login', (_) => false);
+              }
             },
             child: const Text('Logout',
                 style: TextStyle(
@@ -228,66 +252,81 @@ class _StickyHeader extends StatelessWidget {
 // AVATAR SECTION
 // ══════════════════════════════════════════════════════════════
 class _AvatarSection extends StatelessWidget {
+  final ProviderProfileProvider profile;
+  const _AvatarSection({required this.profile});
+
   @override
   Widget build(BuildContext context) {
+    final logo = profile.logoUrl;
+    final initial = profile.businessName.isNotEmpty 
+        ? profile.businessName[0].toUpperCase() 
+        : 'P';
+
     return Column(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Avatar circle
-            Container(
-              width: 96, height: 96,
-              decoration: BoxDecoration(
-                shape:  BoxShape.circle,
-                color:  _kPrimary.withOpacity(0.20),
-                border: Border.all(
-                    color: _kPrimary, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color:      _kPrimary.withOpacity(0.20),
-                    blurRadius: 20,
-                    offset:     const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.person_rounded,
-                  color: _kPrimary, size: 46),
-            ),
-            // Edit button — purple circle bottom-right
-            Positioned(
-              bottom: 0, right: 0,
-              child: Container(
-                width: 32, height: 32,
+        GestureDetector(
+          onTap: () => Navigator.pushNamed(context, '/provider/edit-profile'),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Avatar circle
+              Container(
+                width: 96, height: 96,
                 decoration: BoxDecoration(
-                  color:  _kPrimary,
                   shape:  BoxShape.circle,
+                  color:  _kPrimary.withOpacity(0.20),
                   border: Border.all(
-                      color: _kBg, width: 2.5),
+                      color: _kPrimary, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color:      _kPrimary.withOpacity(0.30),
-                      blurRadius: 8,
-                      offset:     const Offset(0, 2),
+                      color:      _kPrimary.withOpacity(0.20),
+                      blurRadius: 20,
+                      offset:     const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.edit_rounded,
-                    color: Colors.white, size: 15),
+                child: HayaAvatar(
+                  avatarUrl: logo,
+                  size: 96,
+                  borderRadius: 99,
+                  isProvider: true,
+                ),
               ),
-            ),
-          ],
+              // Edit button — purple circle bottom-right
+              Positioned(
+                bottom: 0, right: 0,
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color:  _kPrimary,
+                    shape:  BoxShape.circle,
+                    border: Border.all(
+                        color: _kBg, width: 2.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color:      _kPrimary.withOpacity(0.30),
+                        blurRadius: 8,
+                        offset:     const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.edit_rounded,
+                      color: Colors.white, size: 15),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
-        const Text('HayaBook Provider',
-            style: TextStyle(
+        Text(profile.businessName,
+            style: const TextStyle(
               fontFamily:  'Inter',
               fontSize:    18,
               fontWeight:  FontWeight.w700,
               color:       _kTextDark,
             )),
         const SizedBox(height: 3),
-        Text('Professional Consultant',
+        Text(profile.category,
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize:   14,
@@ -296,6 +335,7 @@ class _AvatarSection extends StatelessWidget {
       ],
     );
   }
+
 }
 
 // ══════════════════════════════════════════════════════════════

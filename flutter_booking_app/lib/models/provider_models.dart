@@ -16,6 +16,11 @@ class TimeBlock {
     endTime:   endTime   ?? this.endTime,
   );
 
+  factory TimeBlock.fromJson(Map<String, dynamic> json) => TimeBlock(
+    startTime: json['startTime'] ?? '09:00',
+    endTime:   json['endTime']   ?? '17:00',
+  );
+
   bool containsTime(String time) {
     final t     = _toMinutes(time);
     final start = _toMinutes(startTime);
@@ -26,14 +31,17 @@ class TimeBlock {
   int get durationMinutes => _toMinutes(endTime) - _toMinutes(startTime);
 
   static int _toMinutes(String t) {
-    final parts  = t.trim().split(' ');
-    final hm     = parts[0].split(':');
-    int hour     = int.parse(hm[0]);
-    final minute = int.parse(hm[1]);
-    final isPm   = parts.length > 1 && parts[1].toUpperCase() == 'PM';
-    if (isPm  && hour != 12) hour += 12;
-    if (!isPm && hour == 12) hour  = 0;
-    return hour * 60 + minute;
+    final lower = t.toLowerCase().trim();
+    final parts = lower.split(' ');
+    final hm    = parts[0].split(':');
+    int h       = int.parse(hm[0]);
+    final m     = int.parse(hm[1]);
+    
+    // Support optional AM/PM for compatibility during transition
+    if (lower.contains('pm') && h != 12) h += 12;
+    if (lower.contains('am') && h == 12) h = 0;
+    
+    return h * 60 + m;
   }
 
   @override
@@ -56,8 +64,8 @@ class DaySchedule {
     required this.blocks,
   });
 
-  String get startTime => blocks.isNotEmpty ? blocks.first.startTime : '09:00 AM';
-  String get endTime   => blocks.isNotEmpty ? blocks.last.endTime   : '05:00 PM';
+  String get startTime => blocks.isNotEmpty ? blocks.first.startTime : '09:00';
+  String get endTime   => blocks.isNotEmpty ? blocks.last.endTime   : '17:00';
 
   DaySchedule copyWith({
     bool?            isOpen,
@@ -69,7 +77,7 @@ class DaySchedule {
     if (blocks == null && (startTime != null || endTime != null)) {
       final first = newBlocks.isNotEmpty
           ? newBlocks.first
-          : const TimeBlock(startTime: '09:00 AM', endTime: '05:00 PM');
+          : const TimeBlock(startTime: '09:00', endTime: '17:00');
       newBlocks = [
         first.copyWith(startTime: startTime, endTime: endTime),
         ...newBlocks.skip(1),
@@ -82,6 +90,16 @@ class DaySchedule {
       blocks: newBlocks,
     );
   }
+
+  factory DaySchedule.fromJson(Map<String, dynamic> json) => DaySchedule(
+    day:    json['day']     ?? 'Monday',
+    letter: json['letter']  ?? 'M',
+    isOpen: json['isOpen']  ?? false,
+    blocks: (json['blocks'] as List<dynamic>?)
+            ?.map((b) => TimeBlock.fromJson(b))
+            .toList() ??
+        const [],
+  );
 
   bool isTimeAvailable(String time) {
     if (!isOpen) return false;
@@ -96,6 +114,7 @@ class DaySchedule {
 /// Why a booking ended up cancelled.
 enum CancelReason {
   byProvider, // provider tapped "Cancel Appointment"
+  byClient,   // client cancelled from their app
   noShow,     // appointment time passed with no action taken
 }
 
@@ -109,6 +128,7 @@ class ProviderBooking {
   final double                price;
   final ProviderBookingStatus status;
   final String?               notes;
+  final String                clientId; // Required for messaging back
   final bool                  clientOnline;
   final CancelReason?         cancelReason; // only set when status == cancelled
 
@@ -121,6 +141,7 @@ class ProviderBooking {
     required this.bookingDate,
     required this.price,
     required this.status,
+    required this.clientId,
     this.notes,
     this.clientOnline = false,
     this.cancelReason,
@@ -129,22 +150,28 @@ class ProviderBooking {
   factory ProviderBooking.fromClientBooking({
     required String   id,
     required String   clientName,
+    required String   clientId,
+    required String   clientAvatar,
     required String   serviceName,
     required String   timeSlot,
     required DateTime bookingDate,
     required double   price,
     String?           notes,
+    ProviderBookingStatus? status,
+    CancelReason?      cancelReason,
   }) {
     return ProviderBooking(
       id:           id,
       clientName:   clientName,
-      clientAvatar: '',
+      clientAvatar: clientAvatar,
       serviceName:  serviceName,
       timeSlot:     timeSlot,
+      clientId:     clientId,
       bookingDate:  bookingDate,
       price:        price,
-      status:       ProviderBookingStatus.upcoming,
+      status:       status ?? ProviderBookingStatus.upcoming,
       notes:        notes,
+      cancelReason: cancelReason,
     );
   }
 
@@ -163,6 +190,7 @@ class ProviderBooking {
       price:        price,
       status:       status       ?? this.status,
       notes:        notes        ?? this.notes,
+      clientId:     clientId,
       clientOnline: clientOnline,
       cancelReason: cancelReason ?? this.cancelReason,
     );
@@ -170,8 +198,8 @@ class ProviderBooking {
 
   // ── Helpers ────────────────────────────────────────────────
 
-  /// Parses the END time from timeSlot (e.g. "02:00 PM - 03:30 PM" → 03:30 PM,
-  /// or "04:30 PM" → 04:30 PM) and returns the absolute DateTime of that moment.
+  /// Parses the END time from timeSlot (e.g. "14:00 - 15:30" → 15:30,
+  /// or "16:30" → 16:30) and returns the absolute DateTime of that moment.
   DateTime get appointmentEndTime {
     final parts = timeSlot.split('-');
     final endStr = parts.length >= 2 ? parts.last.trim() : parts.first.trim();
@@ -187,12 +215,14 @@ class ProviderBooking {
 
   static int _parseSlotMinutes(String t) {
     final lower = t.toLowerCase().trim();
-    final clean = lower.replaceAll(RegExp(r'[apm ]'), '');
-    final tp    = clean.split(':');
-    int h       = int.tryParse(tp.isNotEmpty ? tp[0] : '9') ?? 9;
-    final int m = int.tryParse(tp.length > 1 ? tp[1] : '0') ?? 0;
+    final parts = lower.split(' ');
+    final hm    = parts[0].split(':');
+    int h       = int.tryParse(hm.isNotEmpty ? hm[0] : '09') ?? 9;
+    final m     = int.tryParse(hm.length > 1 ? hm[1] : '00') ?? 0;
+    
     if (lower.contains('pm') && h != 12) h += 12;
     if (lower.contains('am') && h == 12) h = 0;
+    
     return h * 60 + m;
   }
 

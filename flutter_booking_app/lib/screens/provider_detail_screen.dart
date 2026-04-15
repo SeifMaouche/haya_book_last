@@ -1,5 +1,4 @@
 // lib/screens/provider_detail_screen.dart
-import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,15 +6,16 @@ import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../providers/booking_provider.dart';
 import '../providers/favorites_provider.dart';
-import '../providers/provider_profile_provider.dart';
-import '../models/provider_model.dart';
-import 'provider/chat_provider.dart';
+import '../models/provider_model.dart' as pm;
 import 'chat_screen.dart';
 import 'reviews_screen.dart';
-import '../widgets/glass_kit.dart';
+import '../config/app_config.dart';
+import '../widgets/haya_avatar.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProviderDetailScreen extends StatefulWidget {
-  final ServiceProvider? provider;
+  final pm.ServiceProvider? provider;
   const ProviderDetailScreen({Key? key, this.provider}) : super(key: key);
 
   @override
@@ -24,91 +24,36 @@ class ProviderDetailScreen extends StatefulWidget {
 
 class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
 
-  ServiceProvider? get _p =>
+  pm.ServiceProvider? get _p =>
       widget.provider ??
           Provider.of<BookingProvider>(context, listen: false).selectedProvider;
 
-  List<Map<String, dynamic>> _services(String cat) {
-    if (cat == 'Clinic' || cat == 'Medical / Clinic') {
-      return [
-        {'name': 'General Consultation', 'abbr': 'GC',  'price': 3000.0, 'duration': 30},
-        {'name': 'EEG Brain Mapping',    'abbr': 'EEG', 'price': 8500.0, 'duration': 60},
-        {'name': 'Blood Test Panel',     'abbr': 'BT',  'price': 2500.0, 'duration': 15},
-      ];
-    } else if (cat == 'Salon' || cat == 'Beauty & Salon' ||
-        cat == 'Beauty & Grooming') {
-      return [
-        {'name': 'Hair Cut & Style', 'abbr': 'HC', 'price': 1500.0, 'duration': 45},
-        {'name': 'Hair Coloring',    'abbr': 'CO', 'price': 4000.0, 'duration': 90},
-        {'name': 'Facial Treatment', 'abbr': 'FT', 'price': 2500.0, 'duration': 60},
-      ];
-    } else if (cat == 'Tutor' || cat == 'Tutoring') {
-      return [
-        {'name': 'Math Tutoring',    'abbr': 'MT', 'price': 2000.0, 'duration': 60},
-        {'name': 'Physics Tutoring', 'abbr': 'PT', 'price': 2000.0, 'duration': 60},
-        {'name': 'Test Preparation', 'abbr': 'TP', 'price': 3000.0, 'duration': 90},
-      ];
-    } else {
-      return [
-        {'name': 'Initial Consultation', 'abbr': 'IC', 'price': 2500.0, 'duration': 45},
-        {'name': 'Full Session',         'abbr': 'FS', 'price': 5000.0, 'duration': 90},
-        {'name': 'Follow-up',            'abbr': 'FU', 'price': 1500.0, 'duration': 30},
-      ];
-    }
-  }
 
-  void _openChat(ServiceProvider provider) {
-    final chat = Provider.of<ChatProvider>(context, listen: false);
-    final conv = chat.getOrCreate(
-      providerName:     provider.name,
-      providerCategory: provider.category,
-      clientName:       'Ahmed Benali',
-    );
+  void _openChat(pm.ServiceProvider provider) {
+    // Simply navigate; ChatScreen handles enterConversation on initState
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => ChatScreen(
-        providerName: provider.name,
-        providerAvatar: provider.localImage,
-        isProvider: false,
+        receiverName: provider.name,
+        receiverId:   provider.userId,
+        receiverAvatar: provider.localImage,
+        isProvider:   false,
       ),
     ));
   }
 
-  void _doShare(ServiceProvider p) {
-    Clipboard.setData(ClipboardData(
-      text: '📅 Check out ${p.name} on HayaBook!\n'
-          '⭐ ${p.rating} · ${p.category}\n'
-          '📍 ${p.location}\n'
-          '📞 ${p.phone}',
-    ));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Row(children: [
-        Icon(Icons.copy, color: Colors.white, size: 16),
-        SizedBox(width: 8),
-        Text('Provider info copied!',
-            style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600)),
-      ]),
-      backgroundColor: AppColors.primary,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      duration: const Duration(seconds: 2),
-    ));
+  void _doShare(pm.ServiceProvider p) {
+    Share.share(
+      '📅 Check out ${p.name} on HayaBook!\n'
+      '⭐ ${p.rating.toStringAsFixed(1)} · ${p.category}\n'
+      '📍 ${p.location}\n'
+      '📞 ${p.phone}\n\n'
+      'Book them now on the HayaBook App!',
+      subject: 'Book ${p.name} on HayaBook'
+    );
   }
 
-  void _bookService(ServiceProvider provider, Map<String, dynamic> s) {
-    final bp = Provider.of<BookingProvider>(context, listen: false);
-    bp.selectProvider(provider);
-    bp.selectService(Service(
-      id:              (s['name'] as String).toLowerCase().replaceAll(' ', '_'),
-      name:            s['name'] as String,
-      description:     'Duration: ${s['duration']} mins',
-      price:           s['price'] as double,
-      durationMinutes: s['duration'] as int,
-    ));
-    Navigator.pushNamed(context, '/booking');
-  }
 
-  String _specialtyFor(ServiceProvider p) {
+  String _specialtyFor(pm.ServiceProvider p) {
     switch (p.category) {
       case 'Salon':
       case 'Beauty & Salon':
@@ -121,6 +66,26 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
     }
   }
 
+  Widget _buildSectionCard(Widget child) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          )
+        ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = _p;
@@ -128,12 +93,11 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
       return const Scaffold(body: Center(child: Text('Provider not found')));
     }
 
-    final profile         = Provider.of<ProviderProfileProvider>(context);
-    final displayName     = profile.businessName;
-    final displayBio      = profile.bio;
-    final displayLoc      = profile.locationText;
-    final displayLogo     = profile.logoFile;
-    final displayPortfolio = profile.portfolioPhotos;
+    final displayName     = provider.name;
+    final displayBio      = provider.bio;
+    final displayLoc      = provider.location;
+    final displayLogo     = provider.imageUrl; // Use remote imageUrl instead of local File
+    final displayPortfolio = provider.portfolio.map((e) => e.url).toList(); // Use remote urls from the model
 
     return Consumer<FavoritesProvider>(
       builder: (_, fp, __) {
@@ -155,7 +119,7 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
                         displayName:    displayName,
                         specialtyLabel: _specialtyFor(provider),
                         isFav:          isFav,
-                        logoFile:       displayLogo,
+                        logoUrl:        displayLogo,
                         onBack:        () => Navigator.pop(context),
                         onShare:       () => _doShare(provider),
                         onChat:        () => _openChat(provider),
@@ -181,8 +145,8 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
 
                       // ── Rating strip ──────────────────────
                       _RatingStrip(
-                        rating:      profile.rating,
-                        reviewCount: profile.reviewCount,
+                        rating:      provider.rating,
+                        reviewCount: provider.reviewCount,
                         category:    provider.category,
                       ),
 
@@ -193,38 +157,100 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
                           children: [
 
                             // ── About ──────────────────────
-                            const _SectionLabel('About'),
-                            const SizedBox(height: 8),
-                            Text(displayBio,
-                                style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize:   14,
-                                    color:      AppColors.textMuted,
-                                    height:     1.65)),
-                            const SizedBox(height: 28),
+                            _buildSectionCard(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _SectionLabel('About'),
+                                  const SizedBox(height: 12),
+                                  Text(displayBio,
+                                      style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize:   14,
+                                          color:      AppColors.textMuted,
+                                          height:     1.65)),
+                                ],
+                              ),
+                            ),
 
                             // ── Portfolio — ALWAYS visible ─
-                            _PortfolioSection(photos: displayPortfolio),
-                            const SizedBox(height: 28),
+                            _buildSectionCard(_PortfolioSection(photos: displayPortfolio)),
 
                             // ── Services ───────────────────
-                            const _SectionLabel('Services'),
-                            const SizedBox(height: 12),
-                            ..._services(provider.category).map((s) =>
-                                _ServiceRow(
-                                  service: s,
-                                  onBook:  () => _bookService(provider, s),
-                                )),
-                            const SizedBox(height: 28),
+                            _buildSectionCard(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _SectionLabel('Services'),
+                                  const SizedBox(height: 16),
+                                  if (provider.services.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.only(bottom: 12),
+                                      child: Text('No services listed.',
+                                          style: TextStyle(color: AppColors.textMuted)),
+                                    )
+                                  else
+                                    ...provider.services.map((s) => Container(
+                                          margin: const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.background,
+                                            borderRadius: BorderRadius.circular(16),
+                                            border: Border.all(
+                                                color: Colors.grey.withOpacity(0.08)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(s.name,
+                                                        style: const TextStyle(
+                                                            fontFamily: 'Inter',
+                                                            fontWeight: FontWeight.w700,
+                                                            fontSize: 15,
+                                                            color: AppColors.textDark)),
+                                                    if (s.description.isNotEmpty) ...[
+                                                      const SizedBox(height: 4),
+                                                      Text(s.description,
+                                                          style: const TextStyle(
+                                                              fontFamily: 'Inter',
+                                                              color: AppColors.textMuted,
+                                                              fontSize: 13,
+                                                              height: 1.4)),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Text('\$${s.price.toStringAsFixed(2)}',
+                                                  style: const TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      color: AppColors.primary,
+                                                      fontWeight: FontWeight.w800,
+                                                      fontSize: 16)),
+                                            ],
+                                          ),
+                                        )),
+                                ],
+                              ),
+                            ),
 
                             // ── Location ───────────────────
-                            const _SectionLabel('Location'),
-                            const SizedBox(height: 12),
-                            _LocationSection(addressText: displayLoc),
-                            const SizedBox(height: 28),
+                            _buildSectionCard(
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _SectionLabel('Location'),
+                                  const SizedBox(height: 16),
+                                  _LocationSection(addressText: displayLoc),
+                                ],
+                              ),
+                            ),
 
                             // ── Reviews ────────────────────
-                            _ReviewsSection(provider: provider),
+                            _buildSectionCard(_ReviewsSection(provider: provider)),
                           ],
                         ),
                       ),
@@ -258,22 +284,17 @@ class _ProviderDetailScreenState extends State<ProviderDetailScreen> {
 // Shows a grid when photos exist, a friendly placeholder when empty.
 // ══════════════════════════════════════════════════════════════
 class _PortfolioSection extends StatefulWidget {
-  final List<File> photos;
+  final List<String> photos;
   const _PortfolioSection({required this.photos});
   @override
   State<_PortfolioSection> createState() => _PortfolioSectionState();
 }
 
 class _PortfolioSectionState extends State<_PortfolioSection> {
-  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final hasPhotos = widget.photos.isNotEmpty;
-    final shown     = _expanded
-        ? widget.photos
-        : widget.photos.take(6).toList();
-    final hasMore   = widget.photos.length > 6;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       // Header row
@@ -294,74 +315,34 @@ class _PortfolioSectionState extends State<_PortfolioSection> {
       ),
       const SizedBox(height: 12),
 
-      // ── Photos grid ───────────────────────────────────────
-      if (hasPhotos) ...[
-        GridView.builder(
-          shrinkWrap: true,
-          physics:    const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount:   3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing:  8,
-          ),
-          itemCount: shown.length,
-          itemBuilder: (_, i) {
-            final isLastAndMore = !_expanded && hasMore && i == 5;
-            return GestureDetector(
-              onTap: () => _openViewer(context, i),
-              child: Stack(fit: StackFit.expand, children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.file(shown[i], fit: BoxFit.cover),
+      // ── Photos carousel ───────────────────────────────────────
+      if (hasPhotos)
+        SizedBox(
+          height: 180, // Height of the modern carousel
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: widget.photos.length,
+            itemBuilder: (_, i) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: GestureDetector(
+                  onTap: () => _openViewer(context, i),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      width: 140,
+                      child: Image.network(
+                        AppConfig.getMediaUrl(widget.photos[i]),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
                 ),
-                if (isLastAndMore)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      color: Colors.black.withOpacity(0.55),
-                      child: Center(child: Text(
-                        '+${widget.photos.length - 5}',
-                        style: const TextStyle(
-                          fontFamily:  'Inter',
-                          fontSize:    22,
-                          fontWeight:  FontWeight.w800,
-                          color:       Colors.white,
-                        ),
-                      )),
-                    ),
-                  ),
-              ]),
-            );
-          },
-        ),
-        if (hasMore) ...[
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Row(mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _expanded
-                        ? 'Show less'
-                        : 'Show all ${widget.photos.length} photos',
-                    style: const TextStyle(
-                      fontFamily:  'Inter',
-                      fontSize:    13,
-                      fontWeight:  FontWeight.w700,
-                      color:       AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.primary, size: 18,
-                  ),
-                ]),
+              );
+            },
           ),
-        ],
-      ]
+        )
 
       // ── Empty placeholder ──────────────────────────────────
       else
@@ -416,7 +397,7 @@ class _PortfolioSectionState extends State<_PortfolioSection> {
 
 // ── Full-screen photo viewer ──────────────────────────────────
 class _PhotoViewer extends StatefulWidget {
-  final List<File> photos;
+  final List<String> photos;
   final int        initialIndex;
   const _PhotoViewer({required this.photos, required this.initialIndex});
   @override
@@ -448,7 +429,7 @@ class _PhotoViewerState extends State<_PhotoViewer> {
           onPageChanged: (i) => setState(() => _current = i),
           itemBuilder:   (_, i) => InteractiveViewer(
             child: Center(
-                child: Image.file(widget.photos[i], fit: BoxFit.contain)),
+                child: Image.network(AppConfig.getMediaUrl(widget.photos[i]), fit: BoxFit.contain)),
           ),
         ),
         SafeArea(child: Padding(
@@ -555,11 +536,11 @@ class _BottomActionBar extends StatelessWidget {
 // HERO SECTION
 // ══════════════════════════════════════════════════════════════
 class _HeroSection extends StatelessWidget {
-  final ServiceProvider provider;
+  final pm.ServiceProvider provider;
   final String          displayName;
   final String          specialtyLabel;
   final bool            isFav;
-  final File?           logoFile;
+  final String          logoUrl;
   final VoidCallback    onBack, onShare, onChat, onFavToggle;
 
   const _HeroSection({
@@ -567,7 +548,7 @@ class _HeroSection extends StatelessWidget {
     required this.displayName,
     required this.specialtyLabel,
     required this.isFav,
-    required this.logoFile,
+    required this.logoUrl,
     required this.onBack,
     required this.onShare,
     required this.onChat,
@@ -627,14 +608,12 @@ class _HeroSection extends StatelessWidget {
                               color: Colors.black.withOpacity(0.15),
                               blurRadius: 12, offset: const Offset(0, 4))],
                         ),
-                        child: ClipOval(child: SizedBox(
-                          width: 88, height: 88,
-                          child: logoFile != null
-                              ? Image.file(logoFile!,
-                              fit: BoxFit.cover, width: 88, height: 88)
-                              : Image.asset(provider.localImage,
-                              fit: BoxFit.cover, width: 88, height: 88),
-                        )),
+                        child: HayaAvatar(
+                          avatarUrl:    logoUrl,
+                          size:         88,
+                          borderRadius: 99,
+                          isProvider:   true,
+                        ),
                       ),
                       Positioned(bottom: 4, right: 4,
                         child: Container(
@@ -790,54 +769,6 @@ class _RatingStrip extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SERVICE ROW
-// ══════════════════════════════════════════════════════════════
-class _ServiceRow extends StatelessWidget {
-  final Map<String, dynamic> service; final VoidCallback onBook;
-  const _ServiceRow({required this.service, required this.onBook});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin:  const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(children: [
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(8)),
-          child: Center(child: Text(service['abbr'] as String,
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 10,
-                  fontWeight: FontWeight.w700, color: AppColors.primary))),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(service['name'] as String,
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 14,
-                    fontWeight: FontWeight.w500, color: AppColors.textDark)),
-            Text('${service['duration']} min',
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 11,
-                    color: AppColors.textMuted)),
-          ],
-        )),
-        GestureDetector(
-          onTap: onBook,
-          child: Text('DZD ${(service['price'] as double).toStringAsFixed(0)}',
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 14,
-                  fontWeight: FontWeight.w700, color: AppColors.primary)),
-        ),
-      ]),
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════
 // LOCATION SECTION
@@ -846,110 +777,182 @@ class _LocationSection extends StatelessWidget {
   final String addressText;
   const _LocationSection({required this.addressText});
 
+  void _openInMaps() async {
+    final query = Uri.encodeComponent(addressText);
+    // Universal maps search URI
+    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(children: [
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.cardBorder),
+          color: AppColors.background, borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.withOpacity(0.1)),
         ),
         child: Row(children: [
-          const Icon(Icons.location_on, color: AppColors.secondary, size: 18),
-          const SizedBox(width: 10),
+          const Icon(Icons.location_on, color: AppColors.secondary, size: 20),
+          const SizedBox(width: 12),
           Expanded(child: Text(addressText,
-              style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
-                  color: AppColors.textMuted))),
+              style: const TextStyle(fontFamily: 'Inter', fontSize: 14,
+                  fontWeight: FontWeight.w500, color: AppColors.textDark))),
         ]),
       ),
-      const SizedBox(height: 10),
-      Container(
-        height: 180,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(fit: StackFit.expand, children: [
-          CustomPaint(painter: _MapPainter(), child: Container()),
-          Center(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 52, height: 52,
+      const SizedBox(height: 14),
+      GestureDetector(
+        onTap: _openInMaps,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              height: 180,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(fit: StackFit.expand, children: [
+                CustomPaint(painter: _MapPainter(), child: Container()),
+                Center(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 56, height: 56,
+                      decoration: BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 12, offset: const Offset(0, 4))],
+                      ),
+                      child: const Icon(Icons.location_on,
+                          color: AppColors.primary, size: 28),
+                    ),
+                    Container(width: 3, height: 12, color: Colors.white),
+                    Container(
+                      width: 8, height: 8,
+                      decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          shape: BoxShape.circle),
+                    ),
+                  ],
+                )),
+              ]),
+            ),
+            
+            // "Open in Maps" floating button
+            Positioned(
+              bottom: 12, right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white, shape: BoxShape.circle,
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(99),
                   boxShadow: [BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8, offset: const Offset(0, 3))],
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 8, offset: const Offset(0, 4),
+                  )],
                 ),
-                child: const Icon(Icons.location_on,
-                    color: AppColors.primary, size: 28),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.map_outlined, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Text('Open in Maps', style: TextStyle(
+                      fontFamily: 'Inter', fontWeight: FontWeight.w700,
+                      color: Colors.white, fontSize: 12
+                    )),
+                  ],
+                ),
               ),
-              Container(width: 3, height: 10, color: Colors.white),
-              Container(
-                width: 8, height: 8,
-                decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.7),
-                    shape: BoxShape.circle),
-              ),
-            ],
-          )),
-        ]),
+            )
+          ],
+        ),
       ),
     ]);
   }
 }
+
 
 // ══════════════════════════════════════════════════════════════
 // REVIEWS SECTION
 // ══════════════════════════════════════════════════════════════
 class _ReviewsSection extends StatelessWidget {
-  final ServiceProvider provider;
+  final pm.ServiceProvider provider;
   const _ReviewsSection({required this.provider});
-
-  static const List<Map<String, dynamic>> _mockReviews = [
-    {'name': 'Sarah M.',  'initials': 'SM', 'stars': 5,
-      'text': '"Incredibly patient and thorough. Highly recommend!"',
-      'date': '2 days ago'},
-    {'name': 'Karim B.',  'initials': 'KB', 'stars': 5,
-      'text': '"Excellent service. Very professional and knowledgeable."',
-      'date': '1 week ago'},
-  ];
 
   @override
   Widget build(BuildContext context) {
+    final reviews = provider.reviews;
+    final hasReviews = reviews.isNotEmpty;
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const _SectionLabel('Reviews'),
-          GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(
-              builder: (_) => ReviewsScreen(
-                  providerName: provider.name, providerId: provider.id),
-            )),
-            child: const Text('SEE ALL',
-                style: TextStyle(fontFamily: 'Inter', fontSize: 12,
-                    fontWeight: FontWeight.w700, letterSpacing: 0.5,
-                    color: AppColors.primary)),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => ReviewsScreen(
+                      providerName: provider.name, providerId: provider.id),
+                )),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: const Text('+ ADD REVIEW',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 11,
+                          fontWeight: FontWeight.w800, letterSpacing: 0.5,
+                          color: AppColors.primary)),
+                ),
+              ),
+              if (hasReviews) ...[
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ReviewsScreen(
+                        providerName: provider.name, providerId: provider.id),
+                  )),
+                  child: const Text('SEE ALL',
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 12,
+                          fontWeight: FontWeight.w700, letterSpacing: 0.5,
+                          color: AppColors.primary)),
+                ),
+              ]
+            ],
           ),
+
         ],
       ),
       const SizedBox(height: 14),
-      ..._mockReviews.map((r) => _ReviewCard(review: r)),
+      if (!hasReviews)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(
+            child: Text('No reviews yet. Be the first to review!',
+                style: TextStyle(fontFamily: 'Inter', color: AppColors.textMuted)),
+          ),
+        )
+      else
+        ...reviews.take(3).map((r) => _ReviewCard(review: r)),
     ]);
   }
 }
 
 class _ReviewCard extends StatelessWidget {
-  final Map<String, dynamic> review;
+  final pm.Review review;
   const _ReviewCard({required this.review});
 
   @override
   Widget build(BuildContext context) {
-    final int stars = review['stars'] as int;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -958,24 +961,28 @@ class _ReviewCard extends StatelessWidget {
             width: 40, height: 40,
             decoration: BoxDecoration(
                 color: AppColors.primaryLight, shape: BoxShape.circle),
-            child: Center(child: Text(review['initials'] as String,
-                style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
-                    fontWeight: FontWeight.w700, color: AppColors.primary))),
+            child: ClipOval(
+              child: review.userImage.isNotEmpty
+                  ? Image.network(AppConfig.getMediaUrl(review.userImage), fit: BoxFit.cover)
+                  : Center(child: Text(review.userName.isNotEmpty ? review.userName[0].toUpperCase() : 'U',
+                      style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
+                          fontWeight: FontWeight.w700, color: AppColors.primary))),
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(review['name'] as String,
+              Text(review.userName,
                   style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
                       fontWeight: FontWeight.w700, color: AppColors.textDark)),
-              Text(review['date'] as String,
+              Text(_formatTimeAgo(review.createdAt),
                   style: const TextStyle(fontFamily: 'Inter', fontSize: 11,
                       color: AppColors.textMuted)),
             ],
           )),
           Row(mainAxisSize: MainAxisSize.min, children: [
-            Text('$stars.0', style: const TextStyle(fontFamily: 'Inter',
+            Text('${review.rating}', style: const TextStyle(fontFamily: 'Inter',
                 fontSize: 13, fontWeight: FontWeight.w700,
                 color: Color(0xFFF59E0B))),
             const SizedBox(width: 3),
@@ -983,12 +990,19 @@ class _ReviewCard extends StatelessWidget {
           ]),
         ]),
         const SizedBox(height: 8),
-        Text(review['text'] as String,
+        Text(review.comment,
             style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
                 fontStyle: FontStyle.italic, color: AppColors.textMuted,
                 height: 1.5)),
       ]),
     );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays} days ago';
+    if (diff.inHours > 0) return '${diff.inHours} hours ago';
+    return 'just now';
   }
 }
 

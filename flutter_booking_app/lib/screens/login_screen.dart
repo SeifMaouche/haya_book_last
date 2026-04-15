@@ -106,22 +106,31 @@ class _LoginScreenState extends State<LoginScreen>
 
   // ── Login with phone → OTP ────────────────────────────────
   Future<void> _loginWithPhone() async {
+    final phone = '$_countryCode ${_phoneCtrl.text.trim()}';
     if (_phoneCtrl.text.trim().isEmpty) {
       setState(() => _error = 'Please enter your phone number.');
       return;
     }
     setState(() { _isLoading = true; _error = null; });
-    await Future.delayed(const Duration(seconds: 1));
+    
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final ok = await auth.loginWithPhone(phone);
+    
     if (!mounted) return;
     setState(() => _isLoading = false);
-    // OTP verification — same screen for both roles
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => OtpVerificationScreen(
-        role:    _isProvider ? 'provider' : 'client',
-        contact: '$_countryCode ${_phoneCtrl.text.trim()}',
-        isEmail: false,
-      ),
-    ));
+
+    if (ok) {
+      // OTP verification — same screen for both roles
+      Navigator.push(context, MaterialPageRoute(
+        builder: (_) => OtpVerificationScreen(
+          role:    _isProvider ? 'provider' : 'client',
+          contact: phone,
+          isEmail: false,
+        ),
+      ));
+    } else {
+      setState(() => _error = auth.error ?? 'Failed to send OTP. Please check your connection.');
+    }
   }
 
   // ── Login with email ──────────────────────────────────────
@@ -136,10 +145,12 @@ class _LoginScreenState extends State<LoginScreen>
     if (!mounted) return;
     setState(() => _isLoading = false);
     if (ok) {
+      // ✅ Use backend-returned role for correct routing
+      final role = auth.userType;
       Navigator.pushReplacementNamed(
-          context, _isProvider ? '/provider/home' : '/');
+          context, role == 'provider' ? '/provider/home' : '/');
     } else {
-      setState(() => _error = 'Invalid credentials. Please try again.');
+      setState(() => _error = auth.error ?? 'Invalid credentials. Please try again.');
     }
   }
 
@@ -262,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen>
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 30, 24, 30),
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft, end: Alignment.bottomRight,
@@ -285,7 +296,7 @@ class _LoginScreenState extends State<LoginScreen>
             children: [
               // Icon
               Container(
-                width: 76, height: 76,
+                width: 60, height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: _isProvider
@@ -299,9 +310,9 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
                 child: Icon(
                     _isProvider ? Icons.store_rounded : Icons.storefront_rounded,
-                    color: Colors.white, size: 36),
+                    color: Colors.white, size: 28),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
 
               // Title
               AnimatedSwitcher(
@@ -309,7 +320,7 @@ class _LoginScreenState extends State<LoginScreen>
                 child: Text(
                   key: ValueKey(_isProvider),
                   _isProvider ? 'Provider Sign In' : "Welcome Back",
-                  style: const TextStyle(fontFamily: 'Inter', fontSize: 30,
+                  style: const TextStyle(fontFamily: 'Inter', fontSize: 24,
                       fontWeight: FontWeight.w800, color: Colors.white,
                       letterSpacing: -0.5),
                 ),
@@ -586,7 +597,7 @@ class _DarkInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 54,
+      height: 48,
       decoration: BoxDecoration(
         color: const Color(0x0DFFFFFF),
         borderRadius: BorderRadius.circular(16),
@@ -625,7 +636,7 @@ class _CountryField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(onTap: onTap, child: Container(
-      height: 54,
+      height: 48,
       decoration: BoxDecoration(
         color: const Color(0x0DFFFFFF),
         borderRadius: BorderRadius.circular(16),
@@ -654,7 +665,7 @@ class _ActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: loading ? null : onTap,
       child: Container(
-        width: double.infinity, height: 54,
+        width: double.infinity, height: 48,
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [
             accent.withOpacity(0.90), accent]),
@@ -668,11 +679,11 @@ class _ActionButton extends StatelessWidget {
                 color: Colors.white, strokeWidth: 2.5)))
             : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text(label, style: const TextStyle(fontFamily: 'Inter',
-              fontSize: 16, fontWeight: FontWeight.w700,
+              fontSize: 14, fontWeight: FontWeight.w700,
               color: Colors.white)),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           const Icon(Icons.arrow_forward_rounded,
-              color: Colors.white, size: 18),
+              color: Colors.white, size: 16),
         ]),
       ),
     );

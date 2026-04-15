@@ -28,6 +28,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
   late final Animation<double>   _fade;
   late final Animation<Offset>   _slide;
 
+  final _passwordCtrl = TextEditingController();
+  bool _showPass = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +41,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         begin: const Offset(0, 0.05), end: Offset.zero)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
     _anim.forward();
+
+    // Pre-fill email if available (e.g. from email signup)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.email != null && auth.email!.isNotEmpty) {
+        _emailCtrl.text = auth.email!;
+      }
+    });
   }
 
   @override
@@ -75,18 +86,31 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
+    final pass = _passwordCtrl.text.trim();
+
     // Save name, email, and photo path to AuthProvider + SharedPreferences
-    await auth.updateProfile(
+    final success = await auth.updateProfile(
       name:      _nameCtrl.text.trim(),
       email:     _emailCtrl.text.trim(),
       phone:     auth.phone ?? '',
+      password:  pass.isNotEmpty ? pass : null,
       bio:       auth.bio,
       photoPath: _photo?.path,
     );
 
     if (!mounted) return;
     setState(() => _isLoading = false);
-    Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+    
+    if (success) {
+      if (auth.userType == 'provider') {
+        Navigator.pushNamedAndRemoveUntil(context, '/provider/home', (_) => false);
+      } else {
+        Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+      }
+    } else {
+      // Show failure message
+      _showSnack(auth.error ?? 'Profile update failed. Please try again.');
+    }
   }
 
   void _showSnack(String msg) {
@@ -203,7 +227,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                         blurRadius: 32,
                                         offset: const Offset(0, 8))],
                                   ),
-                                  padding: const EdgeInsets.all(28),
+                                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
                                   child: Column(
                                     crossAxisAlignment:
                                     CrossAxisAlignment.center,
@@ -211,7 +235,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                       const Text('Complete Profile',
                                           style: TextStyle(
                                             fontFamily:    'Inter',
-                                            fontSize:      28,
+                                            fontSize:      24,
                                             fontWeight:    FontWeight.w800,
                                             color:         Colors.white,
                                             letterSpacing: -0.5,
@@ -235,7 +259,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                               filter: ImageFilter.blur(
                                                   sigmaX: 12, sigmaY: 12),
                                               child: Container(
-                                                width: 110, height: 110,
+                                                width: 90, height: 90,
                                                 decoration: BoxDecoration(
                                                   shape: BoxShape.circle,
                                                   color: Colors.white
@@ -254,8 +278,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                                   child: Image.file(
                                                     _photo!,
                                                     fit:    BoxFit.cover,
-                                                    width:  110,
-                                                    height: 110,
+                                                    width:  90,
+                                                    height: 90,
                                                   ),
                                                 )
                                                 // Default camera icon
@@ -271,7 +295,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                           Positioned(
                                             right: 0, bottom: 0,
                                             child: Container(
-                                              width: 34, height: 34,
+                                              width: 28, height: 28,
                                               decoration: BoxDecoration(
                                                 gradient: const LinearGradient(
                                                   colors: [Color(0xFF8B5CF6),
@@ -285,7 +309,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                               ),
                                               child: const Icon(Icons.add,
                                                   color: Colors.white,
-                                                  size: 18),
+                                                  size: 16),
                                             ),
                                           ),
                                         ]),
@@ -320,12 +344,40 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                         keyboardType:
                                         TextInputType.emailAddress,
                                       ),
+                                      
+                                      // Password (only if phone user)
+                                      Consumer<AuthProvider>(
+                                        builder: (_, auth, __) {
+                                          final isPhoneUser = auth.email == null || auth.email!.isEmpty;
+                                          if (!isPhoneUser) return const SizedBox.shrink();
+                                          
+                                          return Column(children: [
+                                            const SizedBox(height: 18),
+                                            _glassField(
+                                              label: 'Set Password',
+                                              hint: 'Min. 6 characters',
+                                              controller: _passwordCtrl,
+                                              icon: Icons.lock_outline,
+                                              keyboardType: TextInputType.text,
+                                              obscure: !_showPass,
+                                              suffix: GestureDetector(
+                                                onTap: () => setState(() => _showPass = !_showPass),
+                                                child: Icon(
+                                                  _showPass ? Icons.visibility : Icons.visibility_off,
+                                                  color: Colors.white.withOpacity(0.4),
+                                                  size: 20,
+                                                ),
+                                              ),
+                                            ),
+                                          ]);
+                                        },
+                                      ),
                                       const SizedBox(height: 28),
 
                                       // Continue button
                                       SizedBox(
                                         width:  double.infinity,
-                                        height: 56,
+                                        height: 48,
                                         child: ElevatedButton(
                                           onPressed:
                                           _isLoading ? null : _continue,
@@ -362,7 +414,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                                       // Skip
                                       SizedBox(
                                         width:  double.infinity,
-                                        height: 52,
+                                        height: 48,
                                         child: OutlinedButton(
                                           onPressed: () =>
                                               Navigator.pushNamedAndRemoveUntil(
@@ -419,6 +471,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
     required String label, required String hint,
     required TextEditingController controller,
     required IconData icon, required TextInputType keyboardType,
+    bool obscure = false, Widget? suffix,
   }) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: TextStyle(fontFamily: 'Inter', fontSize: 13,
@@ -429,7 +482,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            height: 56,
+            height: 48,
             decoration: BoxDecoration(
               color:        Colors.white.withOpacity(0.09),
               borderRadius: BorderRadius.circular(14),
@@ -448,6 +501,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                   ),
                   child: TextField(
                     controller: controller, keyboardType: keyboardType,
+                    obscureText: obscure,
                     cursorColor: Colors.white, cursorWidth: 1.5,
                     style: const TextStyle(fontFamily: 'Inter',
                         fontSize: 15, color: Colors.white),
@@ -466,6 +520,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen>
                   ),
                 ),
               ),
+              if (suffix != null)
+                Padding(padding: const EdgeInsets.only(right: 14), child: suffix),
               const SizedBox(width: 14),
             ]),
           ),

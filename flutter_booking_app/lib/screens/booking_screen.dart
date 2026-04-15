@@ -4,33 +4,31 @@ import 'package:intl/intl.dart';
 import '../config/theme.dart';
 import '../models/provider_model.dart';
 import '../models/provider_models.dart';   // ← TimeBlock / DaySchedule
+import '../models/booking_model.dart';     // ← TimeSlot
 import '../providers/booking_provider.dart';
-import '../providers/provider_state.dart';  // ← ProviderStateProvider
-import '../widgets/glass_kit.dart';
 
 // ─────────────────────────────────────────────────────────────
 // SERVICE DATA per category
 // ─────────────────────────────────────────────────────────────
-List<Map<String, dynamic>> _servicesFor(String cat) {
-  if (cat == 'Clinic') {
-    return [
-      {'name': 'General Consultation', 'icon': Icons.medical_services,    'price': 3000.0, 'duration': 30},
-      {'name': 'Follow-up Visit',       'icon': Icons.history,             'price': 2000.0, 'duration': 20},
-      {'name': 'Blood Test Panel',      'icon': Icons.biotech_outlined,    'price': 2500.0, 'duration': 15},
-    ];
-  } else if (cat == 'Salon') {
-    return [
-      {'name': 'Hair Cut & Style', 'icon': Icons.content_cut,         'price': 1500.0, 'duration': 45},
-      {'name': 'Hair Coloring',    'icon': Icons.palette_outlined,    'price': 4000.0, 'duration': 90},
-      {'name': 'Facial Treatment', 'icon': Icons.spa_outlined,        'price': 2500.0, 'duration': 60},
-    ];
-  } else {
-    return [
-      {'name': 'Math Tutoring',    'icon': Icons.calculate_outlined, 'price': 2000.0, 'duration': 60},
-      {'name': 'Physics Tutoring', 'icon': Icons.science_outlined,   'price': 2000.0, 'duration': 60},
-      {'name': 'Test Preparation', 'icon': Icons.task_alt_outlined,  'price': 3000.0, 'duration': 90},
-    ];
-  }
+// ─────────────────────────────────────────────────────────────
+// SERVICE ICON HELPER
+// ─────────────────────────────────────────────────────────────
+IconData _iconForService(String name, String category) {
+  final n = name.toLowerCase();
+  final c = category.toLowerCase();
+  
+  if (n.contains('hair') || n.contains('cut') || c.contains('salon')) return Icons.content_cut;
+  if (n.contains('color') || n.contains('paint')) return Icons.palette_outlined;
+  if (n.contains('facial') || n.contains('spa') || n.contains('skin')) return Icons.spa_outlined;
+  if (n.contains('consult') || n.contains('medical') || c.contains('clinic')) return Icons.medical_services;
+  if (n.contains('blood') || n.contains('test')) return Icons.biotech_outlined;
+  if (n.contains('math')) return Icons.calculate_outlined;
+  if (n.contains('physic') || n.contains('science')) return Icons.science_outlined;
+  if (n.contains('tutor') || n.contains('class') || n.contains('teach')) return Icons.school_outlined;
+  if (n.contains('law') || n.contains('legal')) return Icons.gavel;
+  if (n.contains('fit') || n.contains('gym') || n.contains('coach')) return Icons.fitness_center;
+  
+  return Icons.miscellaneous_services; // Default
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -44,127 +42,20 @@ class BookingScreen extends StatefulWidget {
 }
 
 class _BookingScreenState extends State<BookingScreen> {
-  Map<String, dynamic>? _selectedService;
+  Service? _selectedService;
   DateTime _focusedMonth = DateTime.now();
   DateTime? _selectedDay;
   String?   _selectedSlot;
   bool      _isConfirming = false;
 
-  // ── All candidate slots (30-min grid) ────────────────────────
-  static const List<String> _allSlotTimes = [
-    '9:00 AM',  '9:30 AM',
-    '10:00 AM', '10:30 AM',
-    '11:00 AM', '11:30 AM',
-    '12:00 PM', '12:30 PM',
-    '1:00 PM',  '1:30 PM',
-    '2:00 PM',  '2:30 PM',
-    '3:00 PM',  '3:30 PM',
-    '4:00 PM',  '4:30 PM',
-    '5:00 PM',  '5:30 PM',
-  ];
 
-  // ── Convert 'h:mm AM/PM' → minutes since midnight ────────────
-  static int _toMinutes(String t) {
-    final parts  = t.trim().split(' ');
-    final hm     = parts[0].split(':');
-    int hour     = int.parse(hm[0]);
-    final minute = int.parse(hm[1]);
-    final isPm   = parts.length > 1 && parts[1].toUpperCase() == 'PM';
-    if (isPm  && hour != 12) hour += 12;
-    if (!isPm && hour == 12) hour  = 0;
-    return hour * 60 + minute;
+  // ── Convert 'HH:mm' → minutes since midnight ─────────────────
+
+  // ── Build available slots respecting provider schedule — CLIENT VERSION ───────
+  List<TimeSlot> _getAvailableSlots() {
+    return Provider.of<BookingProvider>(context).availableSlots;
   }
 
-  // ── Build available slots respecting provider schedule ───────
-  /// Returns the list of slot-time strings that:
-  ///   1. Fall within at least one of the provider's open blocks for [date].
-  ///   2. Are not in the past (for today).
-  ///   3. Are not already booked (hard-coded set for demo purposes).
-  List<String> _getAvailableSlots() {
-    if (_selectedDay == null) return [];
-
-    // Fetch provider's day schedule
-    final ps       = Provider.of<ProviderStateProvider>(context, listen: false);
-    final daySchedule = ps.scheduleForDate(_selectedDay!);
-
-    // Day is closed — no slots at all
-    if (daySchedule == null) return [];
-
-    final now     = DateTime.now();
-    final isToday = _isSameDay(_selectedDay!, now);
-
-    // Demo booked set (in a real app this comes from the booking backend)
-    const bookedTimes = {'11:30 AM', '2:30 PM'};
-
-    return _allSlotTimes.where((t) {
-      // 1. Must be within a provider block
-      if (!daySchedule.isTimeAvailable(t)) return false;
-
-      // 2. Must not be already booked
-      if (bookedTimes.contains(t)) return false;
-
-      // 3. For today, must not be in the past (give 30-min buffer)
-      if (isToday) {
-        final slotDt = _slotDateTime(t, _selectedDay!);
-        if (slotDt.isBefore(now.add(const Duration(minutes: 30)))) {
-          return false;
-        }
-      }
-
-      return true;
-    }).toList();
-  }
-
-  // ── Group available slots by provider block ───────────────────
-  /// Returns a list of (blockLabel, List<String>) pairs so the UI can
-  /// show a small header per working window, making it obvious where
-  /// the lunch break falls.
-  List<_SlotGroup> _getSlotGroups() {
-    if (_selectedDay == null) return [];
-
-    final ps          = Provider.of<ProviderStateProvider>(context, listen: false);
-    final daySchedule = ps.scheduleForDate(_selectedDay!);
-    if (daySchedule == null) return [];
-
-    final now         = DateTime.now();
-    final isToday     = _isSameDay(_selectedDay!, now);
-    const bookedTimes = {'11:30 AM', '2:30 PM'};
-
-    final groups = <_SlotGroup>[];
-
-    for (int i = 0; i < daySchedule.blocks.length; i++) {
-      final block = daySchedule.blocks[i];
-      final slots = _allSlotTimes.where((t) {
-        if (!block.containsTime(t))  return false;
-        if (bookedTimes.contains(t)) return false;
-        if (isToday) {
-          final slotDt = _slotDateTime(t, _selectedDay!);
-          if (slotDt.isBefore(now.add(const Duration(minutes: 30)))) {
-            return false;
-          }
-        }
-        return true;
-      }).toList();
-
-      if (slots.isNotEmpty) {
-        groups.add(_SlotGroup(
-          label:     daySchedule.blocks.length > 1
-              ? 'Block ${i + 1} · ${block.startTime} – ${block.endTime}'
-              : '${block.startTime} – ${block.endTime}',
-          slots:     slots,
-          isBreakAfter: i < daySchedule.blocks.length - 1,
-        ));
-      }
-    }
-
-    return groups;
-  }
-
-  DateTime _slotDateTime(String t, DateTime date) {
-    final mins = _toMinutes(t);
-    return DateTime(date.year, date.month, date.day,
-        mins ~/ 60, mins % 60);
-  }
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -177,8 +68,16 @@ class _BookingScreenState extends State<BookingScreen> {
   /// Returns true if this calendar date is within the provider's
   /// open schedule (used to dim closed days).
   bool _isDayOpen(DateTime d) {
-    final ps = Provider.of<ProviderStateProvider>(context, listen: false);
-    return ps.scheduleForDate(d) != null;
+    final bp = Provider.of<BookingProvider>(context, listen: false);
+    final provider = bp.selectedProvider;
+    if (provider == null) return false;
+    
+    final dayName = DateFormat('EEEE').format(d);
+    final schedule = provider.workingHours.firstWhere(
+      (h) => h.day.toLowerCase() == dayName.toLowerCase(),
+      orElse: () => DaySchedule(day: dayName, letter: dayName[0], isOpen: false, blocks: []),
+    );
+    return schedule.isOpen;
   }
 
   void _prevMonth() => setState(() {
@@ -211,14 +110,7 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() => _isConfirming = true);
 
     final bp = Provider.of<BookingProvider>(context, listen: false);
-    bp.selectService(Service(
-      id:              (_selectedService!['name'] as String)
-          .toLowerCase().replaceAll(' ', '_'),
-      name:            _selectedService!['name'] as String,
-      description:     'Duration: ${_selectedService!['duration']} mins',
-      price:           _selectedService!['price'] as double,
-      durationMinutes: _selectedService!['duration'] as int,
-    ));
+    bp.selectService(_selectedService!);
     bp.selectDate(_selectedDay!);
     bp.selectTimeSlot(_selectedSlot!);
 
@@ -227,7 +119,7 @@ class _BookingScreenState extends State<BookingScreen> {
     setState(() => _isConfirming = false);
 
     if (ok) {
-      Navigator.of(context).pushReplacementNamed('/payment');
+      Navigator.of(context).pushReplacementNamed('/confirmation');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(bp.error ?? 'Booking failed. Please try again.'),
@@ -243,9 +135,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Widget build(BuildContext context) {
     final bp       = Provider.of<BookingProvider>(context);
     final provider = bp.selectedProvider;
-    final services = provider != null
-        ? _servicesFor(provider.category)
-        : <Map<String, dynamic>>[];
+    final services = provider?.services ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -262,7 +152,7 @@ class _BookingScreenState extends State<BookingScreen> {
                   _buildSectionHeader('1. Choose Service',
                       trailing: _requiredBadge()),
                   const SizedBox(height: 14),
-                  ...services.map((s) => _buildServiceCard(s)),
+                  ...services.map((s) => _buildServiceCard(s, provider?.category ?? 'General')),
 
                   const SizedBox(height: 28),
 
@@ -425,10 +315,21 @@ class _BookingScreenState extends State<BookingScreen> {
   );
 
   // ── SERVICE CARD ──────────────────────────────────────────────
-  Widget _buildServiceCard(Map<String, dynamic> s) {
-    final selected = _selectedService?['name'] == s['name'];
+  Widget _buildServiceCard(Service s, String category) {
+    final selected = _selectedService?.id == s.id;
     return GestureDetector(
-      onTap: () => setState(() => _selectedService = s),
+      onTap: () {
+        setState(() {
+          _selectedService = s;
+          _selectedSlot    = null; // Reset slot if service changes
+        });
+        final bp = Provider.of<BookingProvider>(context, listen: false);
+        bp.selectService(s);
+        // If date was already picked, this will refresh slots for the new service duration
+        if (_selectedDay != null) {
+          bp.selectDate(_selectedDay!);
+        }
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.only(bottom: 12),
@@ -459,30 +360,32 @@ class _BookingScreenState extends State<BookingScreen> {
                   color: selected ? AppColors.primary : const Color(0xFFE9ECEF),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(s['icon'] as IconData,
+                child: Icon(_iconForService(s.name, category),
                     color: selected ? Colors.white : AppColors.textMuted,
                     size: 22),
               ),
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(s['name'] as String,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(s.name,
+                        style: TextStyle(
+                          fontFamily: 'Inter', fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: selected ? AppColors.textDark : AppColors.textMuted,
+                        )),
+                    const SizedBox(height: 3),
+                    Text(
+                      'DZD ${s.price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => "${m[1]},")}',
                       style: TextStyle(
-                        fontFamily: 'Inter', fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? AppColors.textDark : AppColors.textMuted,
-                      )),
-                  const SizedBox(height: 3),
-                  Text(
-                    'DZD ${(s['price'] as double).toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => "${m[1]},")}',
-                    style: TextStyle(
-                      fontFamily: 'Inter', fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? AppColors.primary : AppColors.textMuted,
+                        fontFamily: 'Inter', fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? AppColors.primary : AppColors.textMuted,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ]),
           ),
@@ -549,6 +452,8 @@ class _BookingScreenState extends State<BookingScreen> {
               onTap: disabled ? null : () => setState(() {
                 _selectedDay  = date;
                 _selectedSlot = null;
+                // Wake up the provider to fetch real slots
+                Provider.of<BookingProvider>(context, listen: false).selectDate(date);
               }),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
@@ -627,10 +532,8 @@ class _BookingScreenState extends State<BookingScreen> {
       );
     }
 
-    final ps          = Provider.of<ProviderStateProvider>(context, listen: false);
-    final daySchedule = ps.scheduleForDate(_selectedDay!);
-
-    if (daySchedule == null) {
+    final isDayOpen = _isDayOpen(_selectedDay!);
+    if (!isDayOpen) {
       return _emptySlotState(
         icon: Icons.event_busy_outlined,
         message: 'Provider is closed on this day',
@@ -638,9 +541,9 @@ class _BookingScreenState extends State<BookingScreen> {
       );
     }
 
-    final groups = _getSlotGroups();
+    final slots = _getAvailableSlots();
 
-    if (groups.isEmpty) {
+    if (slots.isEmpty) {
       return _emptySlotState(
         icon: Icons.event_busy_outlined,
         message: 'No available slots for this date',
@@ -648,119 +551,58 @@ class _BookingScreenState extends State<BookingScreen> {
       );
     }
 
-    // Render each block as its own grid with a label
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: groups.map((g) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Block label
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics:    const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount:  3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 2.5,
+          ),
+          itemCount:   slots.length,
+          itemBuilder: (_, i) {
+            final slot = slots[i];
+            final t    = slot.time;
+            final sel  = _selectedSlot == t;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedSlot = t),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color:        AppColors.primaryLight,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(g.label,
-                    style: const TextStyle(
-                      fontFamily: 'Inter', fontSize: 11,
-                      fontWeight: FontWeight.w700, color: AppColors.primary,
-                    )),
-              ),
-            ]),
-          ),
-
-          // Slot grid for this block
-          GridView.builder(
-            shrinkWrap: true,
-            physics:    const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount:  3,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 2.5,
-            ),
-            itemCount:   g.slots.length,
-            itemBuilder: (_, i) {
-              final t   = g.slots[i];
-              final sel = _selectedSlot == t;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedSlot = t),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  decoration: BoxDecoration(
+                  color: sel
+                      ? Colors.white.withOpacity(0.85)
+                      : Colors.white.withOpacity(0.60),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
                     color: sel
-                        ? Colors.white.withOpacity(0.85)
-                        : Colors.white.withOpacity(0.60),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: sel
-                          ? AppColors.primary.withOpacity(0.5)
-                          : Colors.white.withOpacity(0.5),
-                      width: sel ? 2 : 1,
-                    ),
-                    boxShadow: [BoxShadow(
-                      color: sel
-                          ? AppColors.primary.withOpacity(0.08)
-                          : Colors.black.withOpacity(0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    )],
+                        ? AppColors.primary.withOpacity(0.5)
+                        : Colors.white.withOpacity(0.5),
+                    width: sel ? 2 : 1,
                   ),
-                  child: Center(
-                    child: Text(t, style: TextStyle(
-                      fontFamily: 'Inter', fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: sel ? AppColors.primary : AppColors.textDark,
-                    )),
-                  ),
+                  boxShadow: [BoxShadow(
+                    color: sel
+                        ? AppColors.primary.withOpacity(0.08)
+                        : Colors.black.withOpacity(0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )],
                 ),
-              );
-            },
-          ),
-
-          // Break divider between groups
-          if (g.isBreakAfter)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Row(children: [
-                Expanded(child: Container(height: 1,
-                    color: const Color(0xFFE9ECEF))),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color:        const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: const Color(0xFFFED7AA)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('☕', style: TextStyle(fontSize: 12)),
-                      SizedBox(width: 4),
-                      Text('Break',
-                          style: TextStyle(
-                            fontFamily: 'Inter', fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFFEA580C),
-                          )),
-                    ],
-                  ),
+                child: Center(
+                  child: Text(t, style: TextStyle(
+                    fontFamily: 'Inter', fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: sel ? AppColors.primary : AppColors.textDark,
+                  )),
                 ),
-                const SizedBox(width: 10),
-                Expanded(child: Container(height: 1,
-                    color: const Color(0xFFE9ECEF))),
-              ]),
-            )
-          else
-            const SizedBox(height: 14),
-        ],
-      )).toList(),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -796,8 +638,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   // ── BOTTOM CTA ────────────────────────────────────────────────
   Widget _buildBottomCTA() {
-    final price    = _selectedService != null
-        ? (_selectedService!['price'] as double) : 0.0;
+    final price    = _selectedService?.price ?? 0.0;
     final priceStr =
         'DZD ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}';
 
@@ -912,17 +753,4 @@ class _BookingScreenState extends State<BookingScreen> {
       offset:     const Offset(0, 6),
     )],
   );
-}
-
-// ── Internal data model for grouped slots ─────────────────────
-class _SlotGroup {
-  final String       label;
-  final List<String> slots;
-  final bool         isBreakAfter;
-
-  const _SlotGroup({
-    required this.label,
-    required this.slots,
-    required this.isBreakAfter,
-  });
 }

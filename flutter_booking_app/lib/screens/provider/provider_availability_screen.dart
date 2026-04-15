@@ -194,10 +194,32 @@ class _StickyHeader extends StatelessWidget {
                     letterSpacing: -0.2,
                   )),
             ),
-            const SizedBox(
-              width: 36, height: 36,
-              child: Icon(Icons.more_horiz_rounded,
-                  size: 20, color: _kTextDark),
+            ScaleTap(
+              onTap: () {
+                showMenu(
+                  context: context,
+                  position: const RelativeRect.fromLTRB(100, 80, 20, 0),
+                  items: [
+                    const PopupMenuItem(
+                      value: 'reset',
+                      child: Row(children: [
+                        Icon(Icons.refresh_rounded, size: 18, color: _kTextDark),
+                        SizedBox(width: 10),
+                        Text('Reset to Defaults', style: TextStyle(fontSize: 14)),
+                      ]),
+                    ),
+                  ],
+                ).then((value) {
+                  if (value == 'reset') {
+                     // We could call a method to reset here.
+                  }
+                });
+              },
+              child: const SizedBox(
+                width: 36, height: 36,
+                child: Icon(Icons.more_horiz_rounded,
+                    size: 20, color: _kTextDark),
+              ),
             ),
           ]),
         ),

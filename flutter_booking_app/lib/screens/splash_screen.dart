@@ -3,6 +3,10 @@ import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/auth_provider.dart';
+import '../providers/chat_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -80,9 +84,36 @@ class _SplashScreenState extends State<SplashScreen>
       if (mounted) _progressCtrl.forward();
     });
 
-    _progressCtrl.addStatusListener((s) {
+    _progressCtrl.addStatusListener((s) async {
       if (s == AnimationStatus.completed && mounted) {
-        Navigator.pushReplacementNamed(context, '/onboarding');
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        final chat = Provider.of<ChatProvider>(context, listen: false);
+        await auth.loadAuthState();
+
+        if (auth.isAuthenticated) {
+          chat.initSocket(); // <--- Initialize socket for authenticated users
+          
+          if (auth.profileComplete) {
+            if (auth.userType == 'provider') {
+              Navigator.pushReplacementNamed(context, '/provider/home');
+            } else {
+              Navigator.pushReplacementNamed(context, '/');
+            }
+          } else {
+            // Profile incomplete — force them to complete it
+            Navigator.pushReplacementNamed(context, '/complete-profile');
+          }
+        } else {
+          final prefs = await SharedPreferences.getInstance();
+          final isFirstTime = prefs.getBool('is_first_time') ?? true;
+          
+          if (isFirstTime) {
+            await prefs.setBool('is_first_time', false); // Only once
+            Navigator.pushReplacementNamed(context, '/onboarding');
+          } else {
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        }
       }
     });
   }
@@ -296,7 +327,7 @@ class _WordMark extends StatelessWidget {
           ],
         ).createShader(bounds),
         child: const Text(
-          'Mawidi',
+          'HayaBook', // ✅ FIX F1: Corrected brand name
           style: TextStyle(
             fontFamily:    'Inter',
             fontSize:      52,

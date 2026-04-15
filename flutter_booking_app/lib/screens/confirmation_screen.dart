@@ -150,7 +150,7 @@ class ConfirmationScreen extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Row(
+                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Text(
@@ -161,13 +161,17 @@ class ConfirmationScreen extends StatelessWidget {
                                       color: AppColors.textMuted,
                                     ),
                                   ),
-                                  Text(
-                                    '#$bookingRef',
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.primary,
+                                  Flexible(
+                                    child: Text(
+                                      '#$bookingRef',
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
@@ -220,94 +224,94 @@ class ConfirmationScreen extends StatelessWidget {
                                       const SizedBox(height: 16),
                                       // Date & Fee row
                                       Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           // Date & Time
                                           Expanded(
+                                            flex: 3,
                                             child: Row(
-                                              crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 const Icon(
                                                   Icons.calendar_today,
                                                   color: AppColors.primary,
-                                                  size: 20,
+                                                  size: 18,
                                                 ),
                                                 const SizedBox(width: 8),
-                                                Column(
-                                                  crossAxisAlignment:
-                                                  CrossAxisAlignment
-                                                      .start,
-                                                  children: [
-                                                    const Text(
-                                                      'DATE & TIME',
-                                                      style: TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 9,
-                                                        fontWeight:
-                                                        FontWeight.w700,
-                                                        letterSpacing: 0.7,
-                                                        color: AppColors
-                                                            .textMuted,
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text(
+                                                        'DATE & TIME',
+                                                        style: TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          fontSize: 9,
+                                                          fontWeight: FontWeight.w800,
+                                                          letterSpacing: 0.5,
+                                                          color: AppColors.textMuted,
+                                                        ),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 3),
-                                                    Text(
-                                                      dateTimeStr,
-                                                      style: const TextStyle(
-                                                        fontFamily: 'Inter',
-                                                        fontSize: 13,
-                                                        fontWeight:
-                                                        FontWeight.w600,
-                                                        color:
-                                                        AppColors.textDark,
+                                                      const SizedBox(height: 3),
+                                                      Text(
+                                                        dateTimeStr,
+                                                        style: const TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          fontSize: 13,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: AppColors.textDark,
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
-                                                    ),
-                                                  ],
+                                                    ],
+                                                  ),
                                                 ),
                                               ],
                                             ),
                                           ),
+                                          const SizedBox(width: 12),
                                           // Fee
-                                          Row(
-                                            crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                            children: [
-                                              const Icon(
-                                                Icons.payments,
-                                                color: AppColors.primary,
-                                                size: 20,
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Column(
-                                                crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'FEE',
-                                                    style: TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      fontSize: 9,
-                                                      fontWeight:
-                                                      FontWeight.w700,
-                                                      letterSpacing: 0.7,
-                                                      color:
-                                                      AppColors.textMuted,
-                                                    ),
+                                          Expanded(
+                                            flex: 2,
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Icon(
+                                                  Icons.payments,
+                                                  color: AppColors.primary,
+                                                  size: 18,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text(
+                                                        'FEE',
+                                                        style: TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          fontSize: 9,
+                                                          fontWeight: FontWeight.w800,
+                                                          letterSpacing: 0.5,
+                                                          color: AppColors.textMuted,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 3),
+                                                      Text(
+                                                        'DZD ${price.toStringAsFixed(0)}',
+                                                        style: const TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          fontSize: 13,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: AppColors.textDark,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  const SizedBox(height: 3),
-                                                  Text(
-                                                    'DZD ${price.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}',
-                                                    style: const TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                      FontWeight.w700,
-                                                      color: AppColors.textDark,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),

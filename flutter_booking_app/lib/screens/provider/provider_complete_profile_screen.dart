@@ -7,6 +7,12 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/booking_provider.dart';
+import '../../providers/provider_state.dart';
+import '../../providers/provider_profile_provider.dart';
+import '../../services/provider_service.dart';
 
 const _kPrimary   = Color(0xFF6B46C1);
 const _kBg        = Color(0xFFF8FAFC);
@@ -46,17 +52,14 @@ class _ProviderCompleteProfileScreenState
   final _bioKey    = GlobalKey();
 
   // ── Data ──────────────────────────────────────────────────
-  String         _category = 'Beauty & Salon';
+  String         _category = '';
   final List<File?> _photos = []; // real picked images
   int            _step    = 0;
   bool           _saving  = false;
   LatLng         _location = const LatLng(36.7372, 3.0865);
 
   static const _totalSteps = 5;
-  static const _categories = [
-    'Beauty & Salon', 'Health & Wellness', 'Fitness',
-    'Tutoring', 'Medical / Clinic', 'Spa & Relaxation',
-  ];
+  List<String> _categories = [];
   static const _stepLabels = [
     'Business Name', 'Category', 'Address',
     'Portfolio Photos', 'About Your Business',
@@ -71,6 +74,19 @@ class _ProviderCompleteProfileScreenState
       statusBarColor:          Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ));
+
+    // ── Enforce Strict Role Policy ────────────────────────────
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.userType != 'provider') {
+        _showRoleErrorAndExit();
+        return;
+      }
+      
+      // Fetch categories from backend
+      _fetchInitialData();
+    });
+
     _nameCtrl.addListener(_recalcStep);
     _locCtrl.addListener(_recalcStep);
     _bioCtrl.addListener(_recalcStep);
@@ -86,6 +102,55 @@ class _ProviderCompleteProfileScreenState
     });
 
     _getLocation();
+  }
+
+  void _showRoleErrorAndExit() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Strict Role Policy', style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+        ]),
+        content: const Text(
+          'Your account is registered as a Client. HayaBook policy does not allow switching roles once registered. Please create a new account if you wish to be a Provider.',
+          style: TextStyle(fontFamily: 'Inter', fontSize: 14),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pushNamedAndRemoveUntil(context, '/', (_) => false);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6B46C1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+            ),
+            child: const Text('Back to Home', style: TextStyle(fontFamily: 'Inter', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _fetchInitialData() async {
+    final bp = Provider.of<BookingProvider>(context, listen: false);
+    if (bp.categories.isEmpty) {
+      await bp.fetchCategories();
+    }
+    if (mounted) {
+      setState(() {
+        _categories = bp.categories.map((c) => c.name).toList();
+        if (_categories.isNotEmpty) {
+          _category = _categories[0];
+        }
+      });
+      _recalcStep();
+    }
   }
 
   @override
@@ -228,10 +293,45 @@ class _ProviderCompleteProfileScreenState
       return;
     }
     setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    Navigator.pushNamedAndRemoveUntil(
-        context, '/provider/home', (_) => false);
+    
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final providerService = ProviderService();
+
+      final newToken = await providerService.becomeProvider(
+        businessName: _nameCtrl.text.trim(),
+        category: _category,
+        description: _bioCtrl.text.trim(),
+        address: _locCtrl.text.trim(),
+        latitude: _location.latitude,
+        longitude: _location.longitude,
+      );
+
+      // Force AuthProvider to sync the new Token and 'PROVIDER' role locally.
+      if (newToken != null) {
+        await auth.updateToken(newToken);
+      } else {
+        await auth.loadAuthState();
+      }
+
+      // Initialize provider state before navigating
+      if (mounted) {
+        final ps = Provider.of<ProviderStateProvider>(context, listen: false);
+        final pp = Provider.of<ProviderProfileProvider>(context, listen: false);
+        await Future.wait<dynamic>([
+          ps.loadInitialData(),
+          pp.loadProfile(),
+        ]);
+      }
+
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/provider/home', (_) => false);
+    } catch (e) {
+      if (mounted) {
+        _toast('Registration failed. Please try again.');
+        setState(() => _saving = false);
+      }
+    }
   }
 
   void _toast(String msg) {
@@ -295,13 +395,19 @@ class _ProviderCompleteProfileScreenState
                   // Category
                   _SectionCard(key: _catKey,
                     label: 'CATEGORY', isActive: _step == 1,
-                    child: _DropdownInput(
-                      value: _category, items: _categories,
-                      onChanged: (v) {
-                        setState(() => _category = v!);
-                        _recalcStep();
-                      },
-                    ),
+                    child: _categories.isEmpty 
+                      ? const Center(child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: _kPrimary),
+                        ))
+                      : _DropdownInput(
+                          value: _category.isEmpty ? _categories[0] : _category, 
+                          items: _categories,
+                          onChanged: (v) {
+                            setState(() => _category = v!);
+                            _recalcStep();
+                          },
+                        ),
                   ),
                   const SizedBox(height: 12),
 

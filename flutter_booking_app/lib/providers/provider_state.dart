@@ -1,126 +1,46 @@
 // lib/providers/provider_state.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ FIX F8/F9
 import '../models/provider_models.dart';
+import '../models/provider_model.dart' as model;
+import '../models/booking_model.dart';
+import '../services/booking_service.dart';
+import '../services/provider_service.dart' as service;
+import '../services/socket_service.dart';
 
 class ProviderStateProvider extends ChangeNotifier {
-  // ── Mock data ────────────────────────────────────────────────
+  final _bookingService  = BookingService();
+  final _providerService = service.ProviderService();
 
-  final List<ProviderBooking> _bookings = [
-    // ── Today upcoming ──────────────────────────────────────
-    ProviderBooking(
-      id:           'pb1',
-      clientName:   'Aria Montgomery',
-      clientAvatar: '',
-      serviceName:  'Full Glam Transformation',
-      timeSlot:     '02:00 PM - 03:30 PM',
-      bookingDate:  DateTime.now(),
-      price:        5500,
-      status:       ProviderBookingStatus.upcoming,
-      clientOnline: true,
-    ),
-    ProviderBooking(
-      id:           'pb2',
-      clientName:   'Sophie Chen',
-      clientAvatar: '',
-      serviceName:  'Bridal Trial Package',
-      timeSlot:     '06:15 PM - 07:15 PM',
-      bookingDate:  DateTime.now(),
-      price:        8000,
-      status:       ProviderBookingStatus.upcoming,
-    ),
-    // ── Completed ───────────────────────────────────────────
-    ProviderBooking(
-      id:           'pb3',
-      clientName:   'Yasmine Benali',
-      clientAvatar: '',
-      serviceName:  'Full Glam Transformation',
-      timeSlot:     '11:00 AM - 12:30 PM',
-      bookingDate:  DateTime.now().subtract(const Duration(days: 2)),
-      price:        5500,
-      status:       ProviderBookingStatus.completed,
-    ),
-    ProviderBooking(
-      id:           'pb4',
-      clientName:   'Lena Dupont',
-      clientAvatar: '',
-      serviceName:  'Signature Hair Styling',
-      timeSlot:     '09:00 AM - 09:45 AM',
-      bookingDate:  DateTime.now().subtract(const Duration(days: 1)),
-      price:        3000,
-      status:       ProviderBookingStatus.completed,
-    ),
-    // ── Cancelled by provider ────────────────────────────────
-    ProviderBooking(
-      id:           'pb5',
-      clientName:   'Marcus Webb',
-      clientAvatar: '',
-      serviceName:  'Deep Cleansing Facial',
-      timeSlot:     '03:00 PM - 04:00 PM',
-      bookingDate:  DateTime.now().subtract(const Duration(days: 3)),
-      price:        4200,
-      status:       ProviderBookingStatus.cancelled,
-      cancelReason: CancelReason.byProvider,
-    ),
-    // ── No-show (appointment time is in the past, still "upcoming" in data
-    //    → resolveNoShows() will flip it to cancelled/noShow at runtime) ──
-    ProviderBooking(
-      id:           'pb6',
-      clientName:   'Jordan Kim',
-      clientAvatar: '',
-      serviceName:  'Bridal Trial Package',
-      timeSlot:     '10:00 AM - 12:00 PM',
-      bookingDate:  DateTime.now().subtract(const Duration(days: 1)),
-      price:        8000,
-      status:       ProviderBookingStatus.upcoming, // will become cancelled/noShow
-    ),
-  ];
-
-  List<ProviderService> _services = [
-    ProviderService(
-      id: 's1', name: 'Full Glam Transformation',
-      description: 'Complete makeup including foundation, contouring, and styling.',
-      price: 5500, durationMinutes: 90, isVisible: true,
-    ),
-    ProviderService(
-      id: 's2', name: 'Signature Hair Styling',
-      description: 'Professional blow-dry and styling for any occasion.',
-      price: 3000, durationMinutes: 45, isVisible: true,
-    ),
-    ProviderService(
-      id: 's3', name: 'Deep Cleansing Facial',
-      description: 'Purifying facial treatment with extraction and mask.',
-      price: 4200, durationMinutes: 60, isDraft: true,
-    ),
-    ProviderService(
-      id: 's4', name: 'Bridal Trial Package',
-      description: 'Full bridal look trial with consultation and adjustments.',
-      price: 8000, durationMinutes: 120, isVisible: true,
-    ),
-  ];
-
-  List<DaySchedule> _schedule = [
-    DaySchedule(day: 'Monday',    letter: 'M', isOpen: true,  blocks: [TimeBlock(startTime: '09:00 AM', endTime: '12:00 PM'), TimeBlock(startTime: '02:00 PM', endTime: '06:00 PM')]),
-    DaySchedule(day: 'Tuesday',   letter: 'T', isOpen: true,  blocks: [TimeBlock(startTime: '09:00 AM', endTime: '01:00 PM'), TimeBlock(startTime: '03:00 PM', endTime: '06:00 PM')]),
-    DaySchedule(day: 'Wednesday', letter: 'W', isOpen: false, blocks: [TimeBlock(startTime: '09:00 AM', endTime: '05:00 PM')]),
-    DaySchedule(day: 'Thursday',  letter: 'T', isOpen: true,  blocks: [TimeBlock(startTime: '10:00 AM', endTime: '04:00 PM')]),
-    DaySchedule(day: 'Friday',    letter: 'F', isOpen: true,  blocks: [TimeBlock(startTime: '09:00 AM', endTime: '12:00 PM'), TimeBlock(startTime: '01:30 PM', endTime: '06:00 PM')]),
-    DaySchedule(day: 'Saturday',  letter: 'S', isOpen: false, blocks: [TimeBlock(startTime: '10:00 AM', endTime: '03:00 PM')]),
-    DaySchedule(day: 'Sunday',    letter: 'S', isOpen: false, blocks: [TimeBlock(startTime: '10:00 AM', endTime: '03:00 PM')]),
-  ];
-
-  final ProviderStats stats = const ProviderStats(
-    todayBookings: 12, earnings: 1400, rating: 4.95,
-    totalReviews: 2000, earningsChangePercent: 12, todayChange: 3,
+  List<ProviderBooking> _bookings = [];
+  List<ProviderService> _services = []; // Model Service
+  List<DaySchedule>     _schedule = [];
+  ProviderStats         _stats    = const ProviderStats(
+    todayBookings: 0,
+    earnings: 0,
+    rating: 0,
+    totalReviews: 0,
+    earningsChangePercent: 0,
+    todayChange: 0,
   );
+  bool                  _isLoading = false;
+  String?               _error;
+  model.ServiceProvider? _profile;
 
-  bool _vacationMode        = false;
+  bool _vacationMode         = false;
   bool _notificationsEnabled = true;
 
-  bool get vacationMode         => _vacationMode;
-  bool get notificationsEnabled => _notificationsEnabled;
-
   // ── Getters ──────────────────────────────────────────────────
+  bool    get isLoading            => _isLoading;
+  String? get error                => _error;
+  bool    get vacationMode         => _vacationMode;
+  bool    get notificationsEnabled => _notificationsEnabled;
+  ProviderStats get stats          => _stats;
+  model.ServiceProvider? get profile => _profile;
+  
+  List<ProviderService> get services => List.unmodifiable(_services);
+  List<DaySchedule>     get schedule => List.unmodifiable(_schedule);
 
   /// Confirmed bookings whose end time is still in the future.
   List<ProviderBooking> get upcomingBookings {
@@ -154,13 +74,195 @@ class ProviderStateProvider extends ChangeNotifier {
   /// Legacy alias used by home screen.
   List<ProviderBooking> get pastBookings => completedBookings;
 
-  List<ProviderService> get services => List.unmodifiable(_services);
-  List<DaySchedule>     get schedule => List.unmodifiable(_schedule);
+  // ── State Reset ──────────────────────────────────────────────
+  void clear() {
+    _bookings = [];
+    _services = [];
+    _schedule = [];
+    _stats = const ProviderStats(
+      todayBookings: 0,
+      earnings: 0,
+      rating: 0,
+      totalReviews: 0,
+      earningsChangePercent: 0,
+      todayChange: 0,
+    );
+    _profile = null;
+    _error = null;
+    _isLoading = false;
+  }
+
+  // ── Initialization ───────────────────────────────────────────
+
+  void initSocket() async {
+    socketService.init();
+    final socket = socketService.socket;
+    if (socket == null) return;
+
+    socket.off('booking_update');
+    socket.on('booking_update', (data) {
+      debugPrint('--- [Socket.io] ProviderState: Booking Update Received ---');
+      loadInitialData(); // Refresh all stats and bookings
+    });
+  }
+
+  Future<void> loadInitialData() async {
+    // ✅ Hard reset to prevent memory leakage between sessions
+    clear();
+    
+    // ✅ FIX F9: Load persisted settings before fetching data
+    await _loadSettings();
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      // ── Robust Parallel Fetch ───────────────────────────────────
+      final results = await Future.wait([
+        _bookingService.getProviderBookings().catchError((e) {
+          debugPrint('Sync Error (Bookings): $e');
+          return <Booking>[];
+        }),
+        _providerService.getProviderStats().catchError((e) {
+          debugPrint('Sync Error (Stats): $e');
+          return <String, dynamic>{}; // Return empty map instead of null
+        }),
+        _providerService.getAvailability().catchError((e) {
+          debugPrint('Sync Error (Availability): $e');
+          return <dynamic>[]; // Return empty list instead of null
+        }),
+        () async {
+          try {
+            return await _providerService.getCurrentProviderProfile();
+          } catch (e) {
+            debugPrint('Sync Error (Profile): $e');
+            return null;
+          }
+        }(),
+      ]);
+
+      final clientBookings = (results[0] as List?)?.cast<Booking>() ?? [];
+      final providerStats  = results[1];
+      final availability   = results[2];
+      final profileData    = results[3];
+
+      if (profileData != null) {
+        _profile = profileData as model.ServiceProvider;
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // 1. Map Client Bookings -> ProviderBookings (Robust Mapping)
+      // ─────────────────────────────────────────────────────────────
+      _bookings = clientBookings.map<ProviderBooking>((b) {
+        final statusStr = b.status.toUpperCase();
+        
+        ProviderBookingStatus calculatedStatus;
+        if (statusStr == 'COMPLETED') {
+          calculatedStatus = ProviderBookingStatus.completed;
+        } else if (statusStr.contains('CANCELLED') || 
+                   statusStr.contains('CANCELED') || 
+                   statusStr.contains('NO_SHOW')) {
+          calculatedStatus = ProviderBookingStatus.cancelled;
+        } else if (statusStr == 'PENDING' || statusStr == 'CONFIRMED' || statusStr == 'WAITING' || statusStr == 'APPROVED') {
+          calculatedStatus = ProviderBookingStatus.upcoming;
+        } else {
+          // Default to upcoming for any unhandled active statuses
+          calculatedStatus = ProviderBookingStatus.upcoming;
+        }
+
+        CancelReason? reason;
+        if (statusStr == 'CANCELLED_BY_CLIENT') {
+          reason = CancelReason.byClient;
+        } else if (statusStr == 'CANCELLED_BY_PROVIDER') {
+          reason = CancelReason.byProvider;
+        } else if (statusStr.contains('NO_SHOW')) {
+          reason = CancelReason.noShow;
+        }
+
+        return ProviderBooking.fromClientBooking(
+          id:           b.id,
+          clientName:   b.clientName,
+          clientId:     b.userId,
+          clientAvatar: b.clientAvatar,
+          serviceName:  b.serviceName,
+          bookingDate:  b.bookingDate,
+          timeSlot:     b.timeSlot,
+          price:        b.price,
+          status:       calculatedStatus,
+          cancelReason: reason,
+          notes:        b.notes,
+        );
+      }).toList();
+
+      // ─────────────────────────────────────────────────────────────
+      // 2. Refresh Stats
+      // ─────────────────────────────────────────────────────────────
+      if (providerStats != null) {
+        final statsMap = providerStats as Map<String, dynamic>;
+        _stats = ProviderStats(
+          todayBookings:         statsMap['todayBookings'] ?? 0,
+          earnings:              (statsMap['totalEarnings'] as num?)?.toDouble() ?? 0.0,
+          earningsChangePercent: (statsMap['earningsChangePercent'] as num?)?.toDouble() ?? 0.0,
+          rating:                (statsMap['rating'] as num?)?.toDouble() ?? 0.0,
+          totalReviews:          statsMap['totalReviews'] ?? 0,
+          todayChange:           (statsMap['todayChange'] as num?)?.toInt() ?? 0,
+        );
+      } else {
+         _stats = ProviderStats(
+          todayBookings: 0, 
+          earnings: 0.0, earningsChangePercent: 0.0, 
+          rating: 0.0, totalReviews: 0,
+          todayChange: 0,
+         );
+      }
+
+      // ─────────────────────────────────────────────────────────────
+      // 3. Map Availability & Profile
+      // ─────────────────────────────────────────────────────────────
+      if (availability != null) {
+        _schedule = (availability as List).map((e) => DaySchedule.fromJson(e)).toList();
+      } else {
+        _schedule = _generateDefaultSchedule();
+      }
+
+      if (profileData != null) {
+        final p = profileData as model.ServiceProvider;
+        _profile = p;
+        
+        // Update local services list from profile
+        _services = p.services.map((s) => ProviderService(
+          id:              s.id,
+          name:            s.name,
+          description:     s.description,
+          price:           s.price,
+          durationMinutes: s.durationMinutes,
+          isVisible:       !s.isDraft,
+          isDraft:         s.isDraft,
+        )).toList();
+      }
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = 'Failed to load provider dashboard: $e';
+      _isLoading = false;
+      notifyListeners();
+      debugPrint('--- [ProviderState] Critical Load Error: $e ---');
+    }
+  }
+
+  List<DaySchedule> _generateDefaultSchedule() {
+    return [
+      DaySchedule(day: 'Monday',    letter: 'M', isOpen: true,  blocks: [const TimeBlock(startTime: '09:00', endTime: '17:00')]),
+      DaySchedule(day: 'Tuesday',   letter: 'T', isOpen: true,  blocks: [const TimeBlock(startTime: '09:00', endTime: '17:00')]),
+      DaySchedule(day: 'Wednesday', letter: 'W', isOpen: true,  blocks: [const TimeBlock(startTime: '09:00', endTime: '17:00')]),
+      DaySchedule(day: 'Thursday',  letter: 'T', isOpen: true,  blocks: [const TimeBlock(startTime: '09:00', endTime: '17:00')]),
+      DaySchedule(day: 'Friday',    letter: 'F', isOpen: true,  blocks: [const TimeBlock(startTime: '09:00', endTime: '17:00')]),
+      DaySchedule(day: 'Saturday',  letter: 'S', isOpen: false, blocks: [const TimeBlock(startTime: '10:00', endTime: '15:00')]),
+      DaySchedule(day: 'Sunday',    letter: 'S', isOpen: false, blocks: [const TimeBlock(startTime: '10:00', endTime: '15:00')]),
+    ];
+  }
 
   // ── No-show auto-resolution ──────────────────────────────────
-  /// Scans _bookings and flips any upcoming booking whose end time
-  /// has already passed into cancelled/noShow — in-memory only.
-  /// Called lazily from every getter so it always reflects real time.
   void _resolveNoShows() {
     for (int i = 0; i < _bookings.length; i++) {
       final b = _bookings[i];
@@ -171,9 +273,6 @@ class ProviderStateProvider extends ChangeNotifier {
         );
       }
     }
-    // We intentionally do NOT call notifyListeners() here to avoid
-    // infinite rebuild loops; the UI will pick up the state change
-    // on the next natural rebuild cycle.
   }
 
   // ── Schedule lookup ──────────────────────────────────────────
@@ -193,65 +292,100 @@ class ProviderStateProvider extends ChangeNotifier {
 
   // ── Booking actions ──────────────────────────────────────────
 
-  void addBookingFromClient({
-    required String   id,
-    required String   clientName,
-    required String   serviceName,
-    required String   timeSlot,
-    required DateTime bookingDate,
-    required double   price,
-    String?           notes,
-  }) {
-    _bookings.add(ProviderBooking.fromClientBooking(
-      id:          id,
-      clientName:  clientName,
-      serviceName: serviceName,
-      timeSlot:    timeSlot,
-      bookingDate: bookingDate,
-      price:       price,
-      notes:       notes,
-    ));
-    notifyListeners();
-  }
-
   Future<void> completeBooking(String id) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    final idx = _bookings.indexWhere((b) => b.id == id);
-    if (idx != -1) {
-      _bookings[idx] = _bookings[idx].copyWith(
-        status: ProviderBookingStatus.completed,
-      );
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _bookingService.updateStatus(id, 'COMPLETED');
+      if (success) {
+        final idx = _bookings.indexWhere((b) => b.id == id);
+        if (idx != -1) {
+          _bookings[idx] = _bookings[idx].copyWith(status: ProviderBookingStatus.completed);
+        }
+      }
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> cancelBooking(String id) async {
-    await Future.delayed(const Duration(milliseconds: 600));
-    final idx = _bookings.indexWhere((b) => b.id == id);
-    if (idx != -1) {
-      _bookings[idx] = _bookings[idx].copyWith(
-        status:       ProviderBookingStatus.cancelled,
-        cancelReason: CancelReason.byProvider,
-      );
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final success = await _bookingService.updateStatus(id, 'CANCELLED_BY_PROVIDER');
+      if (success) {
+        final idx = _bookings.indexWhere((b) => b.id == id);
+        if (idx != -1) {
+          _bookings[idx] = _bookings[idx].copyWith(
+            status: ProviderBookingStatus.cancelled,
+            cancelReason: CancelReason.byProvider,
+          );
+        }
+      }
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
       notifyListeners();
     }
   }
 
   // ── Service actions ──────────────────────────────────────────
 
-  void addService(ProviderService service) {
-    _services.add(service);
+  Future<bool> addService(String name, String desc, double price, int duration) async {
+    _isLoading = true;
     notifyListeners();
+    try {
+      await _providerService.addService(name: name, description: desc, price: price, durationMinutes: duration);
+      // Safety delay for backend indexing sync
+      await Future.delayed(const Duration(milliseconds: 600));
+      await loadInitialData();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
-  void updateService(ProviderService updated) {
-    final idx = _services.indexWhere((s) => s.id == updated.id);
-    if (idx != -1) { _services[idx] = updated; notifyListeners(); }
+  Future<bool> updateService(String id, String name, String desc, double price, int duration) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _providerService.updateService(id, name: name, description: desc, price: price, durationMinutes: duration);
+      // Safety delay for backend indexing sync
+      await Future.delayed(const Duration(milliseconds: 600));
+      await loadInitialData();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
-  void deleteService(String id) {
-    _services.removeWhere((s) => s.id == id);
+  Future<bool> deleteService(String id) async {
+    _isLoading = true;
     notifyListeners();
+    try {
+      await _providerService.deleteService(id);
+      // Safety delay for backend indexing sync
+      await Future.delayed(const Duration(milliseconds: 600));
+      await loadInitialData();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   // ── Schedule actions ─────────────────────────────────────────
@@ -263,8 +397,8 @@ class ProviderStateProvider extends ChangeNotifier {
 
   void addBlockToDay(int dayIndex) {
     final day      = _schedule[dayIndex];
-    String newStart = '05:00 PM';
-    String newEnd   = '06:00 PM';
+    String newStart = '17:00';
+    String newEnd   = '18:00';
     if (day.blocks.isNotEmpty) {
       newStart = day.blocks.last.endTime;
       newEnd   = _addHours(newStart, 1);
@@ -282,7 +416,7 @@ class ProviderStateProvider extends ChangeNotifier {
     _schedule[dayIndex] = day.copyWith(
       blocks: newB.isNotEmpty
           ? newB
-          : [const TimeBlock(startTime: '09:00 AM', endTime: '05:00 PM')],
+          : [const TimeBlock(startTime: '09:00', endTime: '17:00')],
     );
     notifyListeners();
   }
@@ -295,35 +429,63 @@ class ProviderStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveSchedule() async =>
-      Future.delayed(const Duration(milliseconds: 800));
+  Future<void> saveSchedule() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _providerService.saveAvailability(_schedule);
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   // ── Settings ─────────────────────────────────────────────────
 
-  void toggleVacationMode(bool value) {
-    _vacationMode = value;
+  // ✅ FIX F8/F9: SharedPreferences keys for persistent provider settings
+  static const _kVacationMode         = 'provider_vacationMode';
+  static const _kNotificationsEnabled = 'provider_notificationsEnabled';
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _vacationMode         = prefs.getBool(_kVacationMode)         ?? false;
+    _notificationsEnabled = prefs.getBool(_kNotificationsEnabled) ?? true;
     notifyListeners();
   }
 
-  void toggleNotifications(bool value) {
+  void toggleVacationMode(bool value) async {
+    _vacationMode = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kVacationMode, value);
+  }
+
+  void toggleNotifications(bool value) async {
     _notificationsEnabled = value;
     notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kNotificationsEnabled, value);
   }
 
   // ── Helpers ──────────────────────────────────────────────────
 
   static String _addHours(String timeStr, int hours) {
-    final parts  = timeStr.trim().split(' ');
-    final hm     = parts[0].split(':');
-    int hour     = int.parse(hm[0]);
+    final lower = timeStr.toLowerCase().trim();
+    final parts = lower.split(' ');
+    final hm    = parts[0].split(':');
+    int hour    = int.parse(hm[0]);
     final minute = int.parse(hm[1]);
-    final isPm   = parts.length > 1 && parts[1].toUpperCase() == 'PM';
-    if (isPm  && hour != 12) hour += 12;
-    if (!isPm && hour == 12) hour  = 0;
+    
+    // Support AM/PM for transition compatibility
+    if (lower.contains('pm') && hour != 12) hour += 12;
+    if (lower.contains('am') && hour == 12) hour = 0;
+    
     hour = (hour + hours).clamp(0, 23);
-    final period = hour >= 12 ? 'PM' : 'AM';
-    final h12    = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
-    final m      = minute.toString().padLeft(2, '0');
-    return '$h12:$m $period';
+    final h = hour.toString().padLeft(2, '0');
+    final m = minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 }

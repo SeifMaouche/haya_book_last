@@ -1,31 +1,70 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Add this import
 import '../models/booking_model.dart';
 import '../models/provider_model.dart';
-import 'provider_state.dart'; // import so we can notify the provider side
+import '../models/provider_models.dart'; // Add this import
+import '../models/category_model.dart' as cat;
+import '../services/provider_service.dart' as service;
+import '../services/booking_service.dart';
+import '../services/socket_service.dart';
+import 'provider_state.dart';
 
 class BookingProvider extends ChangeNotifier {
+  final _providerService = service.ProviderService();
+  final _bookingService  = BookingService();
+
   List<Booking> _bookings = [];
   List<ServiceProvider> _providers = [];
+  List<cat.Category> _categories = [];
   List<TimeSlot> _availableSlots = [];
-  List<String> _favorites = [];
   ServiceProvider? _selectedProvider;
   Service? _selectedService;
   DateTime? _selectedDate;
   String? _selectedTimeSlot;
   bool _isLoading = false;
   String? _error;
+  
+  // ── Sync & State state ─────────────────────────────────────────
+  int _lastRequestId = 0;
+  String? _currentCategory;
+  String? _currentSearchQuery;
 
   // ── Getters ──────────────────────────────────────────────────
   List<Booking> get bookings => List.unmodifiable(_bookings);
   List<ServiceProvider> get providers => _providers;
+  List<cat.Category> get categories => _categories;
   List<TimeSlot> get availableSlots => _availableSlots;
-  List<String> get favorites => _favorites;
   ServiceProvider? get selectedProvider => _selectedProvider;
   Service? get selectedService => _selectedService;
   DateTime? get selectedDate => _selectedDate;
   String? get selectedTimeSlot => _selectedTimeSlot;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  String? get currentCategory => _currentCategory;
+  String? get currentSearchQuery => _currentSearchQuery;
+
+  // ── Sync ──────────────────────────────────────────────────
+  void initSocket() async {
+    socketService.init();
+    final socket = socketService.socket;
+    if (socket == null) return;
+
+    socket.off('booking_update');
+    socket.on('booking_update', (data) {
+      debugPrint('--- [Socket.io] BookingProvider: Booking Update Received ---');
+      fetchUserBookings();
+      // If we are looking at a specific provider's slots, refresh them
+      if (_selectedProvider != null && _selectedDate != null) {
+        _fetchAvailableSlots();
+      }
+    });
+
+    socket.off('notification_received');
+    socket.on('notification_received', (data) {
+      debugPrint('--- [Socket.io] Notification Received: $data ---');
+      // Potential to show a top snackbar or badge
+    });
+  }
 
   Booking? get lastBooking =>
       _bookings.isNotEmpty ? _bookings.last : null;
@@ -34,133 +73,106 @@ class BookingProvider extends ChangeNotifier {
   List<Booking> getUpcomingBookings() {
     final now = DateTime.now();
     return _bookings
-        .where((b) => b.status != 'cancelled' && b.bookingDate.isAfter(now))
+        .where((b) {
+          final isCancelled = b.status.toLowerCase().contains('cancelled');
+          final isInProgress = b.status.toUpperCase() == 'IN_PROGRESS';
+          
+          if (isCancelled) return false;
+          // Show if its full start time is in the future OR if it's currently IN_PROGRESS
+          // Also show if it's within the past hour (so users can still see it right as it starts)
+          return b.fullStartDateTime.isAfter(now.subtract(const Duration(minutes: 5))) || isInProgress;
+        })
         .toList()
-      ..sort((a, b) => a.bookingDate.compareTo(b.bookingDate));
+      ..sort((a, b) => a.fullStartDateTime.compareTo(b.fullStartDateTime));
   }
 
   List<Booking> getPastBookings() {
     final now = DateTime.now();
     return _bookings
-        .where((b) => b.status != 'cancelled' && !b.bookingDate.isAfter(now))
+        .where((b) {
+          final isCancelled = b.status.toLowerCase().contains('cancelled');
+          final isInProgress = b.status.toUpperCase() == 'IN_PROGRESS';
+          // It's upcoming if its start time is still in the future (or recently started)
+          final isUpcoming = b.fullStartDateTime.isAfter(now.subtract(const Duration(minutes: 5)));
+          
+          // It's past if it's not cancelled, not in progress, and not upcoming
+          return !isCancelled && !isInProgress && !isUpcoming;
+        })
         .toList()
-      ..sort((a, b) => b.bookingDate.compareTo(a.bookingDate));
+      ..sort((a, b) => b.fullStartDateTime.compareTo(a.fullStartDateTime));
   }
 
   List<Booking> getCancelledBookings() {
     return _bookings
-        .where((b) => b.status == 'cancelled')
+        .where((b) => b.status.toLowerCase().contains('cancelled'))
         .toList()
       ..sort((a, b) => (b.cancelledAt ?? b.createdAt)
           .compareTo(a.cancelledAt ?? a.createdAt));
   }
 
   // ── Providers ────────────────────────────────────────────────
-  Future<void> fetchProviders(
-      {String? category, String? searchQuery}) async {
+  Future<void> fetchProviders({
+    String? category,
+    String? searchQuery,
+    double? minRating,
+    double? maxPrice,
+    String? sortBy,
+    double? lat,
+    double? lng,
+    int? maxDistanceKm,
+  }) async {
+    final requestId = ++_lastRequestId;
     _isLoading = true;
     _error = null;
+    _currentCategory = category;
+    _currentSearchQuery = searchQuery;
     notifyListeners();
 
     try {
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      _providers = [
-        ServiceProvider(
-          id: '1',
-          name: 'Dr. Jhon Johnson',
-          category: 'Clinic',
-          imageUrl: 'assets/images/doc.png',
-          rating: 4.8,
-          reviewCount: 127,
-          location: '123 Health St, Algiers',
-          distance: 0.5,
-          phone: '+213 555 0101',
-          email: 'Jhon@clinic.com',
-          bio: 'Experienced family physician with 10 years of practice.',
-          services: ['Consultation', 'Check-up', 'Vaccination'],
-          workingHours: [
-            WorkingHours(day: 'Monday',    startTime: '09:00', endTime: '17:00', isOpen: true),
-            WorkingHours(day: 'Tuesday',   startTime: '09:00', endTime: '17:00', isOpen: true),
-            WorkingHours(day: 'Wednesday', startTime: '09:00', endTime: '17:00', isOpen: true),
-            WorkingHours(day: 'Thursday',  startTime: '09:00', endTime: '17:00', isOpen: true),
-            WorkingHours(day: 'Friday',    startTime: '09:00', endTime: '13:00', isOpen: true),
-            WorkingHours(day: 'Saturday',  startTime: '',      endTime: '',      isOpen: false),
-            WorkingHours(day: 'Sunday',    startTime: '',      endTime: '',      isOpen: false),
-          ],
-          isVerified: true,
-          averagePrice: 5000.0,
-        ),
-        ServiceProvider(
-          id: '2',
-          name: "Bella's Beauty Salon",
-          category: 'Salon',
-          imageUrl: 'assets/images/salon.png',
-          rating: 4.6,
-          reviewCount: 89,
-          location: '456 Style Ave, Algiers',
-          distance: 1.2,
-          phone: '+213 555 0202',
-          email: 'info@bellas.com',
-          bio: 'Premium beauty and hair salon with certified stylists.',
-          services: ['Hair Cut', 'Hair Coloring', 'Facial', 'Manicure'],
-          workingHours: [
-            WorkingHours(day: 'Monday',    startTime: '10:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Tuesday',   startTime: '10:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Wednesday', startTime: '10:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Thursday',  startTime: '10:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Friday',    startTime: '10:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Saturday',  startTime: '10:00', endTime: '16:00', isOpen: true),
-            WorkingHours(day: 'Sunday',    startTime: '',      endTime: '',      isOpen: false),
-          ],
-          isVerified: true,
-          averagePrice: 3500.0,
-        ),
-        ServiceProvider(
-          id: '3',
-          name: 'Prof. James Tutoring',
-          category: 'Tutor',
-          imageUrl: 'assets/images/tutop.png',
-          rating: 4.9,
-          reviewCount: 156,
-          location: '789 Education Rd, Algiers',
-          distance: 2.1,
-          phone: '+213 555 0303',
-          email: 'james@tutoring.com',
-          bio: 'Expert in mathematics and physics tutoring for all levels.',
-          services: ['Math Tutoring', 'Physics Tutoring', 'Test Prep'],
-          workingHours: [
-            WorkingHours(day: 'Monday',    startTime: '14:00', endTime: '20:00', isOpen: true),
-            WorkingHours(day: 'Tuesday',   startTime: '14:00', endTime: '20:00', isOpen: true),
-            WorkingHours(day: 'Wednesday', startTime: '14:00', endTime: '20:00', isOpen: true),
-            WorkingHours(day: 'Thursday',  startTime: '14:00', endTime: '20:00', isOpen: true),
-            WorkingHours(day: 'Friday',    startTime: '14:00', endTime: '18:00', isOpen: true),
-            WorkingHours(day: 'Saturday',  startTime: '10:00', endTime: '14:00', isOpen: true),
-            WorkingHours(day: 'Sunday',    startTime: '',      endTime: '',      isOpen: false),
-          ],
-          isVerified: true,
-          averagePrice: 2000.0,
-        ),
-      ];
-
-      if (category != null) {
-        _providers =
-            _providers.where((p) => p.category == category).toList();
+      if (_categories.isEmpty) {
+        await fetchCategories();
       }
+
+      // All filtering is now done server-side — no client-side filtering needed
+      final allProviders = await _providerService.getAllProviders(
+        category:       category,
+        minRating:      minRating,
+        maxPrice:       maxPrice,
+        sortBy:         sortBy,
+        lat:            lat,
+        lng:            lng,
+        maxDistanceKm:  maxDistanceKm,
+      );
+
+      // STALE CHECK
+      if (requestId != _lastRequestId) return;
+
+      _providers = allProviders;
+
+      // Client-side search query filter (name/category text match)
       if (searchQuery != null && searchQuery.isNotEmpty) {
-        _providers = _providers
-            .where((p) =>
-        p.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
-            p.category.toLowerCase().contains(searchQuery.toLowerCase()))
-            .toList();
+        _providers = _providers.where((p) =>
+          p.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          p.category.toLowerCase().contains(searchQuery.toLowerCase())
+        ).toList();
       }
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      if (requestId != _lastRequestId) return;
       _error = 'Failed to fetch providers: $e';
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> fetchCategories() async {
+    try {
+      _categories = await _providerService.getPublicCategories();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching categories: $e');
     }
   }
 
@@ -185,11 +197,34 @@ class BookingProvider extends ChangeNotifier {
   }
 
   Future<void> _fetchAvailableSlots() async {
+    if (_selectedProvider == null || _selectedDate == null) return;
     _isLoading = true;
     notifyListeners();
     try {
-      await Future.delayed(const Duration(milliseconds: 400));
-      _availableSlots = _generateAvailableSlots();
+      final dateStr = _selectedDate!.toIso8601String().split('T')[0];
+      final booked = await _bookingService.getBookedSlots(
+        providerId: _selectedProvider!.id,
+        date: dateStr,
+      );
+
+      // Expand booked windows into 30m busy chunks
+      final busyChunks = <String>[];
+      for (var b in booked) {
+        final startStr = b['startTime']!;
+        final endStr   = b['endTime']!;
+        
+        DateTime start = _parseTime(_selectedDate!, startStr);
+        DateTime end   = _parseTime(_selectedDate!, endStr);
+        
+        DateTime curr = start;
+        while (curr.isBefore(end)) {
+          busyChunks.add(_formatTime(curr));
+          curr = curr.add(const Duration(minutes: 30));
+        }
+      }
+
+      _availableSlots = _generateAvailableSlots(busyChunks);
+      
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -199,36 +234,87 @@ class BookingProvider extends ChangeNotifier {
     }
   }
 
-  List<TimeSlot> _generateAvailableSlots() {
+  List<TimeSlot> _generateAvailableSlots(List<String> busyChunks) {
+    if (_selectedProvider == null || _selectedDate == null || _selectedService == null) return [];
+    
+    final sel = _selectedDate!;
     final now = DateTime.now();
-    final sel = _selectedDate;
-    if (sel == null) return [];
+    final isToday = sel.year == now.year && sel.month == now.month && sel.day == now.day;
 
-    final isToday = sel.year == now.year &&
-        sel.month == now.month &&
-        sel.day == now.day;
+    final dayName = DateFormat('EEEE').format(sel);
+    final schedule = _selectedProvider!.workingHours.firstWhere(
+      (h) => h.day.toLowerCase() == dayName.toLowerCase(),
+      orElse: () => DaySchedule(day: dayName, letter: dayName[0], isOpen: false, blocks: []),
+    );
+
+    if (!schedule.isOpen) return [];
 
     final slots = <TimeSlot>[];
-    DateTime t = DateTime(sel.year, sel.month, sel.day, 9, 0);
-    final end = DateTime(sel.year, sel.month, sel.day, 17, 0);
+    final serviceDuration = _selectedService!.durationMinutes;
+    final chunksNeeded = (serviceDuration / 30).ceil();
+    
+    for (var block in schedule.blocks) {
+      DateTime blockStart = _parseTime(sel, block.startTime);
+      DateTime blockEnd   = _parseTime(sel, block.endTime);
 
-    while (t.isBefore(end) || t.isAtSameMomentAs(end)) {
-      bool available = !isToday ||
-          t.isAfter(now.add(const Duration(minutes: 30)));
-      if (t.hour == 10 && t.minute == 0) available = false;
-      if (t.hour == 14 && t.minute == 30) available = false;
-      slots.add(TimeSlot(time: _formatTime(t), isAvailable: available));
-      t = t.add(const Duration(minutes: 30));
+      DateTime t = blockStart;
+      while (t.add(Duration(minutes: serviceDuration)).isBefore(blockEnd.add(const Duration(minutes: 1)))) {
+        final timeStr = _formatTime(t);
+        
+        // 1. Check if in past
+        bool available = !isToday || t.isAfter(now.add(const Duration(minutes: 15)));
+        
+        // 2. Check all chunks needed for this service duration
+        if (available) {
+          for (int i = 0; i < chunksNeeded; i++) {
+            final chunkTime = _formatTime(t.add(Duration(minutes: i * 30)));
+            if (busyChunks.contains(chunkTime)) {
+              available = false;
+              break;
+            }
+          }
+        }
+
+        if (available) {
+          slots.add(TimeSlot(time: timeStr, isAvailable: true));
+        }
+        
+        // Move by 30 mins to allow picking any 30m starting boundary
+        t = t.add(const Duration(minutes: 30));
+      }
     }
+    
     return slots;
   }
 
+  DateTime _parseTime(DateTime date, String timeStr) {
+    try {
+      final lower = timeStr.toLowerCase().trim();
+      final isPM = lower.contains('pm');
+      final isAM = lower.contains('am');
+      
+      // Remove AM/PM for splitting
+      final clean = lower.replaceAll('am', '').replaceAll('pm', '').trim();
+      final parts = clean.split(':');
+      
+      int hour = int.parse(parts[0]);
+      int min  = parts.length > 1 ? int.parse(parts[1]) : 0;
+      
+      if (isPM && hour != 12) hour += 12;
+      if (isAM && hour == 12) hour = 0;
+      
+      return DateTime(date.year, date.month, date.day, hour, min);
+    } catch (e) {
+      debugPrint('Error parsing time "$timeStr": $e');
+      // Fallback to start of day if parsing fails
+      return DateTime(date.year, date.month, date.day, 0, 0);
+    }
+  }
+
   String _formatTime(DateTime t) {
-    final h = t.hour;
-    final m = t.minute;
-    final period = h >= 12 ? 'PM' : 'AM';
-    final dh = h > 12 ? h - 12 : (h == 0 ? 12 : h);
-    return '${dh.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')} $period';
+    final h = t.hour.toString().padLeft(2, '0');
+    final m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   void selectTimeSlot(String timeSlot) {
@@ -239,54 +325,28 @@ class BookingProvider extends ChangeNotifier {
   // ── Create booking — AUTO-CONFIRMED ─────────────────────────
   /// Creates a booking with `status: 'confirmed'` immediately.
   /// Also registers it on the provider side via [providerState].
-  Future<bool> createBooking(
-      String notes, {
-        ProviderStateProvider? providerState,
-      }) async {
+  Future<bool> createBooking(String notes, {ProviderStateProvider? providerState}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      if (_selectedProvider == null ||
-          _selectedService == null ||
-          _selectedDate == null ||
-          _selectedTimeSlot == null) {
+      if (_selectedProvider == null || _selectedService == null || _selectedDate == null || _selectedTimeSlot == null) {
         throw Exception('Please select all required fields');
       }
 
-      await Future.delayed(const Duration(milliseconds: 800));
+      final dateStr = _selectedDate!.toIso8601String().split('T')[0];
 
-      final bookingId =
-          'BK${DateTime.now().year}${(DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(6, '0')}';
-
-      final booking = Booking(
-        id:           bookingId,
-        userId:       'current_user_id',
-        providerId:   _selectedProvider!.id,
-        providerName: _selectedProvider!.name,
-        serviceName:  _selectedService!.name,
-        bookingDate:  _selectedDate!,
-        timeSlot:     _selectedTimeSlot!,
-        price:        _selectedService!.price,
-        status:       'confirmed', // always confirmed — no pending
-        notes:        notes,
-        createdAt:    DateTime.now(),
+      final booking = await _bookingService.createBooking(
+        providerProfileId: _selectedProvider!.id,
+        serviceId:         _selectedService!.id,
+        date:              dateStr,
+        startTime:         _selectedTimeSlot!,
+        notes:             notes,
       );
 
       _bookings.add(booking);
-
-      // ── Sync to provider side (auto-confirm) ──────────────────
-      providerState?.addBookingFromClient(
-        id:          bookingId,
-        clientName:  'Client', // replace with real user name when auth is wired
-        serviceName: _selectedService!.name,
-        timeSlot:    _selectedTimeSlot!,
-        bookingDate: _selectedDate!,
-        price:       _selectedService!.price,
-        notes:       notes.isNotEmpty ? notes : null,
-      );
-
+      
       _isLoading = false;
       notifyListeners();
       return true;
@@ -300,30 +360,18 @@ class BookingProvider extends ChangeNotifier {
 
   // ── Cancel booking ───────────────────────────────────────────
   Future<bool> cancelBooking(String bookingId) async {
+    _isLoading = true;
+    notifyListeners();
     try {
-      final i = _bookings.indexWhere((b) => b.id == bookingId);
-      if (i != -1) {
-        final b = _bookings[i];
-        _bookings[i] = Booking(
-          id:          b.id,
-          userId:      b.userId,
-          providerId:  b.providerId,
-          providerName: b.providerName,
-          serviceName: b.serviceName,
-          bookingDate: b.bookingDate,
-          timeSlot:    b.timeSlot,
-          price:       b.price,
-          status:      'cancelled',
-          notes:       b.notes,
-          createdAt:   b.createdAt,
-          cancelledAt: DateTime.now(),
-        );
-        notifyListeners();
+      final success = await _bookingService.cancelBooking(bookingId);
+      if (success) {
+        await fetchUserBookings(); // Refresh list to get updated status
         return true;
       }
       return false;
     } catch (e) {
       _error = 'Failed to cancel: $e';
+      _isLoading = false;
       notifyListeners();
       return false;
     }
@@ -332,50 +380,22 @@ class BookingProvider extends ChangeNotifier {
   // ── Reschedule booking ───────────────────────────────────────
   Future<bool> rescheduleBooking(
       String bookingId, DateTime newDate, String newTimeSlot) async {
+    _isLoading = true;
+    notifyListeners();
     try {
-      final i = _bookings.indexWhere((b) => b.id == bookingId);
-      if (i != -1) {
-        final b = _bookings[i];
-        _bookings[i] = Booking(
-          id:          b.id,
-          userId:      b.userId,
-          providerId:  b.providerId,
-          providerName: b.providerName,
-          serviceName: b.serviceName,
-          bookingDate: newDate,
-          timeSlot:    newTimeSlot,
-          price:       b.price,
-          status:      'confirmed',
-          notes:       b.notes,
-          createdAt:   b.createdAt,
-        );
-        notifyListeners();
+      final dateStr = newDate.toIso8601String().split('T')[0];
+      final success = await _bookingService.rescheduleBooking(bookingId, dateStr, newTimeSlot);
+      if (success) {
+        await fetchUserBookings(); // Refresh list to get updated status
         return true;
       }
       return false;
     } catch (e) {
       _error = 'Failed to reschedule: $e';
+      _isLoading = false;
       notifyListeners();
       return false;
     }
-  }
-
-  // ── Favorites ────────────────────────────────────────────────
-  void toggleFavorite(String providerId) {
-    if (_favorites.contains(providerId)) {
-      _favorites.remove(providerId);
-    } else {
-      _favorites.add(providerId);
-    }
-    notifyListeners();
-  }
-
-  bool isFavorite(String providerId) => _favorites.contains(providerId);
-
-  List<ServiceProvider> getFavoriteProviders() {
-    return _providers
-        .where((provider) => _favorites.contains(provider.id))
-        .toList();
   }
 
   // ── Reset & Fetch ────────────────────────────────────────────
@@ -392,8 +412,16 @@ class BookingProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-    await Future.delayed(const Duration(milliseconds: 300));
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _bookings = await _bookingService.getUserBookings();
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }
+
+// ✅ FIX F6: Removed duplicate TimeSlot class — canonical definition is in models/booking_model.dart

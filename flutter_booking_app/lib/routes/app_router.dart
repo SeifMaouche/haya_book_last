@@ -8,7 +8,7 @@ import '../screens/login_screen.dart';
 import '../screens/signup_screen.dart';
 import '../screens/otp_verification_screen.dart';
 import '../screens/complete_profile_screen.dart';
-import '../screens/home_screen.dart' hide BrowseScreen;
+import '../screens/home_screen.dart';
 import '../screens/browse_screen.dart';
 import '../screens/bookings_screen.dart';
 import '../screens/messages_screen.dart';
@@ -21,15 +21,16 @@ import '../screens/notifications_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/help_faq_screen.dart';
 import '../screens/contact_us_screen.dart';
-import '../screens/payment_screen.dart';
-import '../screens/add_card_screen.dart';
+// ✅ FIX F5: Removed payment_screen.dart and add_card_screen.dart imports
 import '../screens/privacy_policy_screen.dart';
+
+// ✅ FIX F4: Uncommented chat_screen import
+import '../screens/chat_screen.dart';
 
 // ── Provider screens ───────────────────────────────────────────
 import '../screens/provider/provider_home_screen.dart';
 import '../screens/provider/provider_bookings_screen.dart';
 import '../screens/provider/provider_messages_screen.dart';
-import '../screens/chat_screen.dart';
 import '../screens/provider/provider_services_screen.dart';
 import '../screens/provider/provider_add_service_screen.dart';
 import '../screens/provider/provider_booking_detail_screen.dart';
@@ -38,6 +39,10 @@ import '../screens/provider/provider_edit_profile_screen.dart';
 import '../screens/provider/provider_settings_screen.dart';
 import '../screens/provider/provider_complete_profile_screen.dart';
 import '../screens/provider/provider_availability_screen.dart';
+import '../screens/provider/provider_earnings_screen.dart';
+import '../screens/provider/provider_reviews_screen.dart';
+import '../screens/provider/security_screen.dart';
+import '../screens/provider/help_support_screen.dart';
 
 // ── Models ─────────────────────────────────────────────────────
 import '../models/provider_model.dart';
@@ -112,14 +117,23 @@ class AppRouter {
       case '/contact-us':
         return _build(const ContactUsScreen());
 
-      case '/payment':
-        return _build(const PaymentScreen());
-
-      case '/add-card':
-        return _build(const AddCardScreen());
-
       case '/privacy-policy':
         return _build(const PrivacyPolicyScreen());
+
+    // ✅ FIX F4: /chat route now registered (was commented out, causing navigation crashes)
+      case '/chat': {
+        final args           = settings.arguments as Map<String, dynamic>?;
+        final receiverName   = args?['receiverName']   as String? ?? '';
+        final receiverId     = args?['receiverId']     as String? ?? '';
+        final receiverAvatar = args?['receiverAvatar'] as String? ?? '';
+        final isProvider     = args?['isProvider']     as bool?   ?? false;
+        return _build(ChatScreen(
+          receiverName:   receiverName,
+          receiverId:     receiverId,
+          receiverAvatar: receiverAvatar,
+          isProvider:     isProvider,
+        ));
+      }
 
     // ══════════════════════════════════════════════════════════
     // CLIENT — BOOKING FLOW
@@ -170,9 +184,16 @@ class AppRouter {
         return _build(const ProviderSettingsScreen());
 
     // Weekly availability — from Profile tab → Availability
-    // also from Schedule view → Block Time
       case '/provider/availability':
         return _build(const ProviderAvailabilityScreen());
+
+    // Dashboard Earnings
+      case '/provider/earnings':
+        return _build(const ProviderEarningsScreen());
+
+    // Client Reviews
+      case '/provider/reviews':
+        return _build(const ProviderReviewsScreen());
 
     // Add or edit a service — from Services tab → +
       case '/provider/add-service':
@@ -183,6 +204,12 @@ class AppRouter {
       case '/provider/booking-detail':
         final booking = settings.arguments as ProviderBooking;
         return _build(ProviderBookingDetailScreen(booking: booking));
+
+      case '/provider/security':
+        return _build(const SecurityScreen());
+
+      case '/provider/help-support':
+        return _build(const HelpSupportScreen());
 
     // ══════════════════════════════════════════════════════════
     // FALLBACK

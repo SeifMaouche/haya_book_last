@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import '../config/theme.dart';
 
 class AddCardScreen extends StatefulWidget {
-  const AddCardScreen({Key? key}) : super(key: key);
+  const AddCardScreen({super.key});
 
   @override
   State<AddCardScreen> createState() => _AddCardScreenState();
@@ -58,7 +58,7 @@ class _AddCardScreenState extends State<AddCardScreen> {
           backgroundColor: AppColors.success,
           behavior: SnackBarBehavior.floating,
           shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       Navigator.pop(context);
@@ -80,7 +80,8 @@ class _AddCardScreenState extends State<AddCardScreen> {
                   GestureDetector(
                     onTap: () => Navigator.pop(context),
                     child: Container(
-                      width: 40, height: 40,
+                      width: 40,
+                      height: 40,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         shape: BoxShape.circle,
@@ -115,8 +116,9 @@ class _AddCardScreenState extends State<AddCardScreen> {
                     ),
                   ),
                   Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(
                       color: AppColors.primaryLight,
                       shape: BoxShape.circle,
                     ),
@@ -176,12 +178,12 @@ class _AddCardScreenState extends State<AddCardScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    const Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded,
+                        Icon(Icons.info_outline_rounded,
                             size: 13, color: AppColors.primary),
-                        const SizedBox(width: 6),
-                        const Text('SUPPORTS CIB AND EDAHABIA CARDS',
+                        SizedBox(width: 6),
+                        Text('SUPPORTS CIB AND EDAHABIA CARDS',
                             style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 10,
@@ -257,10 +259,9 @@ class _AddCardScreenState extends State<AddCardScreen> {
             // ── Save Button ────────────────────────────────────
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white,
-                border: Border(
-                    top: BorderSide(color: AppColors.cardBorder)),
+                border: Border(top: BorderSide(color: AppColors.cardBorder)),
               ),
               child: Column(
                 children: [
@@ -277,34 +278,34 @@ class _AddCardScreenState extends State<AddCardScreen> {
                       ),
                       child: _saving
                           ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5))
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2.5))
                           : const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.shield_outlined,
-                              color: Colors.white, size: 20),
-                          SizedBox(width: 10),
-                          Text('Securely Add Card',
-                              style: TextStyle(
-                                  fontFamily: 'Inter',
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white)),
-                        ],
-                      ),
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.shield_outlined,
+                                    color: Colors.white, size: 20),
+                                SizedBox(width: 10),
+                                Text('Securely Add Card',
+                                    style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white)),
+                              ],
+                            ),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.shield_outlined,
                           size: 13, color: AppColors.textLight),
-                      const SizedBox(width: 4),
-                      const Text(
+                      SizedBox(width: 4),
+                      Text(
                           'Your payment data is encrypted and stored securely.',
                           style: TextStyle(
                               fontFamily: 'Inter',
@@ -377,8 +378,8 @@ class _AddCardScreenState extends State<AddCardScreen> {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 16),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
             ),
           ),
@@ -427,19 +428,30 @@ class _LiveCardPreview extends StatelessWidget {
       child: Stack(
         children: [
           // Decorative circles
-          Positioned(right: -30, top: -30,
-            child: Container(width: 140, height: 140,
-                decoration: BoxDecoration(shape: BoxShape.circle,
+          Positioned(
+            right: -30,
+            top: -30,
+            child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
                     color: Colors.white.withOpacity(0.07))),
           ),
-          Positioned(left: -20, bottom: -40,
-            child: Container(width: 120, height: 120,
-                decoration: BoxDecoration(shape: BoxShape.circle,
+          Positioned(
+            left: -20,
+            bottom: -40,
+            child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
                     color: Colors.white.withOpacity(0.05))),
           ),
           // Watermark
           Positioned(
-            right: 16, bottom: 36,
+            right: 16,
+            bottom: 36,
             child: Text(cardType == 'EDAHABIA' ? 'EDAHABIA' : 'CIB',
                 style: TextStyle(
                     fontFamily: 'Inter',
@@ -464,7 +476,8 @@ class _LiveCardPreview extends StatelessWidget {
                             color: Colors.white.withOpacity(0.7),
                             letterSpacing: 1)),
                     Container(
-                      width: 34, height: 34,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(8),
@@ -478,7 +491,8 @@ class _LiveCardPreview extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      width: 36, height: 24,
+                      width: 36,
+                      height: 24,
                       decoration: BoxDecoration(
                         color: const Color(0xFFF59E0B),
                         borderRadius: BorderRadius.circular(4),
@@ -511,7 +525,8 @@ class _LiveCardPreview extends StatelessWidget {
                       children: [
                         Text('CARDHOLDER',
                             style: TextStyle(
-                                fontFamily: 'Inter', fontSize: 8,
+                                fontFamily: 'Inter',
+                                fontSize: 8,
                                 color: Colors.white.withOpacity(0.6),
                                 letterSpacing: 0.8)),
                         Text(displayName,
@@ -527,7 +542,8 @@ class _LiveCardPreview extends StatelessWidget {
                       children: [
                         Text('EXPIRY',
                             style: TextStyle(
-                                fontFamily: 'Inter', fontSize: 8,
+                                fontFamily: 'Inter',
+                                fontSize: 8,
                                 color: Colors.white.withOpacity(0.6),
                                 letterSpacing: 0.8)),
                         Text(displayExpiry,

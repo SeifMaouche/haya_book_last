@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/theme.dart';
+import '../providers/chat_provider.dart';
+import 'package:provider/provider.dart';
 
 class AppBottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -90,6 +92,7 @@ class AppBottomNavBar extends StatelessWidget {
                         activeIcon:  Icons.chat_bubble_rounded,
                         label:       'Messages',
                         onTap:       onTap,
+                        hasBadge:    context.watch<ChatProvider>().hasUnreadMessages,
                       ),
                       _NavItem(
                         index:       4,
@@ -133,6 +136,7 @@ class _NavItem extends StatelessWidget {
   final IconData          activeIcon;
   final String            label;
   final ValueChanged<int> onTap;
+  final bool              hasBadge;
 
   const _NavItem({
     required this.index,
@@ -141,6 +145,7 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.label,
     required this.onTap,
+    this.hasBadge = false,
   });
 
   @override
@@ -175,12 +180,30 @@ class _NavItem extends StatelessWidget {
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
-                child: Icon(
-                  isActive ? activeIcon : icon,
-                  size:  22,
-                  color: isActive
-                      ? AppColors.primary
-                      : const Color(0xFF94A3B8),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      isActive ? activeIcon : icon,
+                      size:  22,
+                      color: isActive
+                          ? AppColors.primary
+                          : const Color(0xFF94A3B8),
+                    ),
+                    if (hasBadge)
+                      Positioned(
+                        top:  -2,
+                        right: -2,
+                        child: Container(
+                          width:  8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(height: 3),

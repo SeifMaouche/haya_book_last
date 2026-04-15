@@ -1,0 +1,135 @@
+\chapter{Architecture et Conception du Système}
+
+\section{Introduction}
+
+Ce chapitre décrit l'architecture globale de la plateforme HayaBook, le schéma de la base de données, la conception de l'API REST et les principaux flux de données du système. L'objectif est de fournir une vision claire et cohérente de la structure du projet avant d'aborder son implémentation.
+
+\section{Architecture globale}
+
+HayaBook adopte une architecture à trois niveaux (\textit{three-tier architecture}) décomposée comme suit :
+
+\begin{enumerate}
+    \item \textbf{Couche présentation} : L'application mobile Flutter (portail client et portail prestataire) et le tableau de bord d'administration React.
+    \item \textbf{Couche logique métier} : Le serveur backend Node.js/Express, qui expose une API REST et gère la logique de réservation, d'authentification, de messagerie et de notifications.
+    \item \textbf{Couche données} : La base de données PostgreSQL, accessible via l'ORM Prisma.
+\end{enumerate}
+
+La communication entre la couche présentation et la couche logique métier se fait via deux protocoles complémentaires :
+\begin{itemize}
+    \item \textbf{HTTP/REST} pour les opérations classiques de création, lecture, mise à jour et suppression (CRUD).
+    \item \textbf{WebSocket (Socket.io)} pour les événements en temps réel (messagerie, notifications de réservation).
+\end{itemize}
+
+\section{Schéma de la base de données}
+
+La base de données HayaBook est composée de onze modèles principaux, définis dans le fichier \texttt{schema.prisma}. Les modèles et leurs relations sont décrits dans le tableau \ref{tab:models}.
+
+\begin{table}[h]
+\centering
+\caption{Principaux modèles de la base de données HayaBook.}
+\label{tab:models}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Modèle} & \textbf{Description} \\
+\hline
+\textbf{User} & Table centrale des utilisateurs (clients, prestataires, administrateurs). Contient les informations d'authentification, le rôle (\texttt{CLIENT}, \texttt{PROVIDER}, \texttt{ADMIN}) et les drapeaux de statut (\texttt{isVerified}, \texttt{isSuspended}, \texttt{deletedAt}). \\
+\hline
+\textbf{ProviderProfile} & Extension 1:1 de \texttt{User} pour les prestataires. Contient le nom commercial, la catégorie, l'adresse, les coordonnées GPS, le statut de vérification, la note moyenne et les horaires de disponibilité (champ JSON). \\
+\hline
+\textbf{Service} & Services proposés par un prestataire (nom, description, prix, durée en minutes). \\
+\hline
+\textbf{ServiceOption} & Variantes d'un service (ex. : « coupe 30 min » vs « coupe + couleur 90 min »). \\
+\hline
+\textbf{Booking} & Enregistrement central d'une réservation, avec les clés étrangères vers \texttt{User} (client), \texttt{ProviderProfile}, \texttt{Service} et \texttt{ServiceOption}. Contient la date (UTC), l'heure de début/fin, la durée, le prix et le statut. \\
+\hline
+\textbf{Review} & Avis déposé par un client après une prestation complétée. Relation 1:1 avec \texttt{Booking}. \\
+\hline
+\textbf{Message} & Message de chat entre deux utilisateurs. Identifié par un \texttt{conversationId} déterministe. \\
+\hline
+\textbf{Otp} & Code OTP à usage unique (6 chiffres, TTL de 10 minutes) pour la vérification d'identité. \\
+\hline
+\textbf{Favorite} & Relation \textit{many-to-many} entre un client et des prestataires favoris. \\
+\hline
+\textbf{Notification} & Notification in-app avec type, titre, corps et données de navigation. \\
+\hline
+\textbf{SupportMessage} & Ticket de support soumis par un utilisateur, traité par un administrateur. \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Énumération BookingStatus}
+
+Le cycle de vie d'une réservation est modélisé par l'énumération \texttt{BookingStatus} qui définit les états suivants : \texttt{PENDING}, \texttt{CONFIRMED}, \texttt{IN\_PROGRESS}, \texttt{COMPLETED}, \texttt{CANCELLED\_BY\_CLIENT}, \texttt{CANCELLED\_BY\_PROVIDER}, \texttt{NO\_SHOW}.
+
+\section{Architecture de l'API REST}
+
+L'API REST du backend HayaBook est structurée en 11 modules de routes, chacun correspondant à un domaine fonctionnel du système. Le tableau \ref{tab:api} présente les principaux modules et leurs routes.
+
+\begin{table}[h]
+\centering
+\caption{Modules de l'API REST de HayaBook.}
+\label{tab:api}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Module} & \textbf{Chemin de base} & \textbf{Accès} \\
+\hline
+Authentification & \texttt{/api/auth} & Public / Authentifié \\
+\hline
+Utilisateurs & \texttt{/api/users} & Authentifié \\
+\hline
+Prestataires & \texttt{/api/providers} & Public / Authentifié \\
+\hline
+Services & \texttt{/api/services} & Authentifié (Prestataire) \\
+\hline
+Réservations & \texttt{/api/bookings} & Authentifié \\
+\hline
+Avis & \texttt{/api/reviews} & Public / Authentifié \\
+\hline
+Messagerie & \texttt{/api/messages} & Authentifié \\
+\hline
+Notifications & \texttt{/api/notifications} & Authentifié \\
+\hline
+Favoris & \texttt{/api/favorites} & Authentifié \\
+\hline
+Recherche & \texttt{/api/search} & Public \\
+\hline
+Administration & \texttt{/api/admin} & Authentifié (Admin) \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Architecture de l'application Flutter}
+
+L'application mobile Flutter adopte une architecture à couches basée sur le patron de conception \textit{Provider} :
+
+\begin{itemize}
+    \item \textbf{Couche services} : Ensemble de classes (ex. \texttt{AuthService}, \texttt{BookingService}, \texttt{ProviderService}) chargées de la communication avec le backend via le client HTTP \textbf{Dio}. Toutes les classes de service utilisent l'instance singleton \texttt{apiClient} qui embarque les intercepteurs JWT et 401.
+    \item \textbf{Couche providers (état)} : Neuf classes \texttt{ChangeNotifier} (ex. \texttt{AuthProvider}, \texttt{BookingProvider}, \texttt{ProviderStateProvider}) qui encapsulent la logique métier côté client et notifient l'interface utilisateur lors de tout changement d'état.
+    \item \textbf{Couche présentation (écrans et widgets)} : 43 écrans organisés en deux portails (client et prestataire), pilotés par le routeur nommé \texttt{AppRouter}.
+    \item \textbf{Couche modèles} : Sept classes de données (ex. \texttt{Booking}, \texttt{ServiceProvider}, \texttt{Review}) avec des constructeurs \texttt{factory} pour la désérialisation JSON.
+\end{itemize}
+
+\section{Flux de données : Création d'une réservation}
+
+Le processus de création d'une réservation dans HayaBook suit le flux suivant :
+
+\begin{enumerate}
+    \item Le client sélectionne un prestataire, un service, une date et un créneau horaire dans l'application Flutter.
+    \item L'application appelle \texttt{GET /api/bookings/slots?providerId=\&date=} pour obtenir les créneaux déjà réservés.
+    \item Le \texttt{BookingProvider} génère les créneaux disponibles en tenant compte des horaires de travail du prestataire, de la durée du service et des créneaux déjà occupés.
+    \item Après confirmation, \texttt{POST /api/bookings} est appelé. Le backend vérifie les chevauchements dans une transaction Prisma atomique, crée l'enregistrement et émet un événement \texttt{booking\_update} via Socket.io aux deux partis.
+    \item Les notifications in-app sont créées en base de données et poussées en temps réel via la salle Socket.io personnelle de chaque utilisateur.
+\end{enumerate}
+
+\section{Worker de transition automatique de statuts}
+
+Un service d'arrière-plan (\texttt{runBookingStatusWorker}) est déclenché toutes les 60 secondes par le serveur. Il effectue deux opérations :
+\begin{itemize}
+    \item Transition \texttt{CONFIRMED} $\rightarrow$ \texttt{IN\_PROGRESS} pour les réservations dont l'heure de début est atteinte.
+    \item Transition \texttt{IN\_PROGRESS} $\rightarrow$ \texttt{COMPLETED} pour les réservations dont l'heure de fin est dépassée.
+\end{itemize}
+Chaque transition est notifiée en temps réel via Socket.io aux utilisateurs concernés.
+
+\section{Conclusion}
+
+Ce chapitre a présenté l'architecture complète de la plateforme HayaBook, depuis la structure de la base de données jusqu'à l'organisation des couches applicatives. On note que la séparation claire des responsabilités entre les couches service, état et présentation dans Flutter, ainsi que la structuration modulaire du backend Node.js, favorisent la maintenabilité et l'extensibilité du code. Le chapitre suivant détaille l'implémentation effective de ces composants.

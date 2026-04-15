@@ -9,8 +9,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../../providers/provider_profile_provider.dart';
+import '../../models/provider_model.dart'; // Add this
 import '../../widgets/provider_bottom_nav_bar.dart';
 import '../../widgets/glass_kit.dart';
+import '../../widgets/haya_avatar.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/booking_provider.dart';
 
 const _kPrimary     = Color(0xFF6D28D9);
 const _kPrimaryDeep = Color(0xFF4C1D95);
@@ -51,13 +55,14 @@ class _ProviderEditProfileScreenState
   late String   _category;
   bool          _saving  = false;
   File?         _logoFile;
+  bool          _removeLogo = false;
+  String?       _logoUrl;
   late List<File> _gallery;
+  late List<PortfolioImage> _remoteGallery;
+  final List<String> _idsToDelete = [];
   late LatLng   _location;
 
-  static const _categories = [
-    'Health & Wellness', 'Beauty & Grooming', 'Beauty & Salon',
-    'Fitness', 'Tutoring', 'Medical / Clinic', 'Spa & Relaxation',
-  ];
+  List<String> _liveCats = [];
 
   final _picker = ImagePicker();
 
@@ -70,19 +75,37 @@ class _ProviderEditProfileScreenState
     ));
 
     // ── Pre-fill from ProviderProfileProvider ───────────────
-    final profile = Provider.of<ProviderProfileProvider>(
-        context, listen: false);
+    final profile = Provider.of<ProviderProfileProvider>(context, listen: false);
     _nameCtrl = TextEditingController(text: profile.businessName);
     _bioCtrl  = TextEditingController(text: profile.bio);
     _locCtrl  = TextEditingController(text: profile.locationText);
     _category = profile.category;
-    _logoFile = profile.logoFile;
-    _gallery  = List<File>.from(profile.portfolioPhotos);
+    _logoUrl  = profile.logoUrl;
+    _gallery  = []; // local files to upload
+    _remoteGallery = List<PortfolioImage>.from(profile.portfolio);
     _location = profile.location;
 
     _nameFocus.addListener(() { if (_nameFocus.hasFocus) _scrollTo(_infoKey); });
     _bioFocus.addListener(()  { if (_bioFocus.hasFocus)  _scrollTo(_bioKey);  });
     _locFocus.addListener(()  { if (_locFocus.hasFocus)  _scrollTo(_locKey);  });
+
+    _fetchCategories();
+  }
+
+  Future<void> _fetchCategories() async {
+    final bp = Provider.of<BookingProvider>(context, listen: false);
+    if (bp.categories.isEmpty) {
+      await bp.fetchCategories();
+    }
+    if (mounted) {
+      setState(() {
+        _liveCats = bp.categories.map((c) => c.name).toList();
+        // Safety: ensure current category is in the list or add it if not (legacy data)
+        if (_category.isNotEmpty && !_liveCats.contains(_category)) {
+          _liveCats.insert(0, _category);
+        }
+      });
+    }
   }
 
   @override
@@ -108,14 +131,30 @@ class _ProviderEditProfileScreenState
 
   // ── Pick logo ─────────────────────────────────────────────
   Future<void> _pickLogo() async {
-    final source = await _sourceSheet();
-    if (source == null) return;
-    try {
-      final img = await _picker.pickImage(
-          source: source, maxWidth: 512, imageQuality: 85);
-      if (img != null && mounted) setState(() => _logoFile = File(img.path));
-    } catch (_) {
-      _toast('Could not pick image. Check permissions.');
+    final result = await _sourceSheet();
+    if (result == null) return;
+
+    if (result is String && result == 'remove') {
+      setState(() {
+        _logoFile = null;
+        _removeLogo = true;
+      });
+      return;
+    }
+
+    if (result is ImageSource) {
+      try {
+        final img = await _picker.pickImage(
+            source: result, maxWidth: 512, imageQuality: 85);
+        if (img != null && mounted) {
+          setState(() {
+            _logoFile = File(img.path);
+            _removeLogo = false;
+          });
+        }
+      } catch (_) {
+        _toast('Could not pick image. Check permissions.');
+      }
     }
   }
 
@@ -134,11 +173,10 @@ class _ProviderEditProfileScreenState
     }
   }
 
-  void _removeGallery(int i) => setState(() => _gallery.removeAt(i));
 
   // ── Image source sheet ────────────────────────────────────
-  Future<ImageSource?> _sourceSheet() {
-    return showModalBottomSheet<ImageSource>(
+  Future<dynamic> _sourceSheet({bool isLogo = true}) {
+    return showModalBottomSheet<dynamic>(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
@@ -161,6 +199,12 @@ class _ProviderEditProfileScreenState
             _SourceTile(icon: Icons.photo_library_rounded,
                 label: 'Choose from Gallery',
                 onTap: () => Navigator.pop(context, ImageSource.gallery)),
+            if (isLogo) ...[
+              const SizedBox(height: 10),
+              _SourceTile(icon: Icons.delete_outline_rounded,
+                  label: 'Remove Photo', isDangerous: true,
+                  onTap: () => Navigator.pop(context, 'remove')),
+            ],
             const SizedBox(height: 8),
           ]),
         ),
@@ -195,17 +239,25 @@ class _ProviderEditProfileScreenState
     if (!mounted) return;
 
     // Persist everything to the shared provider
-    Provider.of<ProviderProfileProvider>(context, listen: false).saveProfile(
-      name:    _nameCtrl.text,
-      cat:     _category,
-      about:   _bioCtrl.text,
-      latLng:  _location,
-      locText: _locCtrl.text,
-      logo:    _logoFile,
-      gallery: List<File>.from(_gallery),
+    final pp = Provider.of<ProviderProfileProvider>(context, listen: false);
+    final success = await pp.saveProfile(
+      name:                 _nameCtrl.text,
+      cat:                  _category,
+      about:                _bioCtrl.text,
+      latLng:               _location,
+      locText:              _locCtrl.text,
+      logo:                 _logoFile,
+      newPortfolioFiles:    _gallery,
+      portfolioIdsToDelete: _idsToDelete,
+      removeLogo:           _removeLogo,
     );
 
     setState(() => _saving = false);
+
+    if (!success) {
+      _toast('Failed to update profile. Please try again.');
+      return;
+    }
 
     // Show success snack then pop
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -262,7 +314,10 @@ class _ProviderEditProfileScreenState
 
                 // Cover + profile pic
                 _CoverSection(
-                    logoFile: _logoFile, onPickLogo: _pickLogo),
+                    logoFile:   _logoFile, 
+                    logoUrl:    _logoUrl,
+                    removeLogo: _removeLogo,
+                    onPickLogo: _pickLogo),
                 const SizedBox(height: 16),
 
                 // Business Info
@@ -279,7 +334,7 @@ class _ProviderEditProfileScreenState
                         const SizedBox(height: 5),
                         _CategoryPicker(
                             value:     _category,
-                            items:     _categories,
+                            items:     _liveCats,
                             onChanged: (v) =>
                                 setState(() => _category = v!)),
                       ],
@@ -324,9 +379,18 @@ class _ProviderEditProfileScreenState
                       ),
                     ),
                     child: _GalleryGrid(
-                        photos:   _gallery,
-                        onRemove: _removeGallery,
-                        onAdd:    _pickGalleryPhoto)),
+                        remotePhotos: _remoteGallery,
+                        localPhotos:  _gallery,
+                        onRemoveRemote: (id, idx) {
+                          setState(() {
+                            _idsToDelete.add(id);
+                            _remoteGallery.removeAt(idx);
+                          });
+                        },
+                        onRemoveLocal: (idx) {
+                          setState(() => _gallery.removeAt(idx));
+                        },
+                        onAdd: _pickGalleryPhoto)),
                 const SizedBox(height: 12),
 
                 // Business Location
@@ -369,7 +433,7 @@ class _ProviderEditProfileScreenState
         mainAxisSize: MainAxisSize.min,
         children: [
           _SaveBar(saving: _saving, onSave: _saving ? null : _save),
-          const ProviderBottomNavBar(currentIndex: 3),
+          const ProviderBottomNavBar(currentIndex: 4),
         ],
       ),
     );
@@ -435,8 +499,15 @@ class _StickyHeader extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 class _CoverSection extends StatelessWidget {
   final File?        logoFile;
+  final String?      logoUrl;
+  final bool         removeLogo;
   final VoidCallback onPickLogo;
-  const _CoverSection({required this.logoFile, required this.onPickLogo});
+  const _CoverSection({
+    required this.logoFile, 
+    this.logoUrl, 
+    required this.removeLogo,
+    required this.onPickLogo,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -478,15 +549,14 @@ class _CoverSection extends StatelessWidget {
                           color:      Colors.black.withOpacity(0.20),
                           blurRadius: 20, offset: const Offset(0, 6))],
                     ),
-                    child: ClipOval(
-                      child: logoFile != null
-                          ? Image.file(logoFile!,
-                          fit: BoxFit.cover, width: 90, height: 90)
-                          : Container(
-                          color: Colors.white.withOpacity(0.15),
-                          child: const Icon(Icons.person_rounded,
-                              color: Colors.white, size: 44)),
-                    ),
+                    child: logoFile != null
+                        ? ClipOval(child: Image.file(logoFile!, fit: BoxFit.cover, width: 90, height: 90))
+                        : HayaAvatar(
+                            avatarUrl: removeLogo ? 'default' : logoUrl,
+                            size: 90,
+                            borderRadius: 99,
+                            isProvider: true,
+                          ),
                   ),
                   Positioned(bottom: 2, right: 2,
                     child: Container(
@@ -658,14 +728,23 @@ class _CategoryPicker extends StatelessWidget {
 // GALLERY GRID
 // ══════════════════════════════════════════════════════════════
 class _GalleryGrid extends StatelessWidget {
-  final List<File>        photos;
-  final ValueChanged<int> onRemove;
-  final VoidCallback      onAdd;
-  const _GalleryGrid({required this.photos, required this.onRemove,
-    required this.onAdd});
+  final List<PortfolioImage> remotePhotos;
+  final List<File>           localPhotos;
+  final Function(String, int) onRemoveRemote;
+  final ValueChanged<int>    onRemoveLocal;
+  final VoidCallback         onAdd;
+
+  const _GalleryGrid({
+    required this.remotePhotos,
+    required this.localPhotos,
+    required this.onRemoveRemote,
+    required this.onRemoveLocal,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
+    
     return GridView.count(
       crossAxisCount:   3,
       crossAxisSpacing: 10,
@@ -673,30 +752,19 @@ class _GalleryGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        ...List.generate(photos.length, (i) => Stack(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              color: _kPrimary.withOpacity(0.10),
-              child: Image.file(photos[i], fit: BoxFit.cover,
-                  width: double.infinity, height: double.infinity),
-            ),
-          ),
-          Positioned(top: 4, right: 4,
-            child: GestureDetector(
-              onTap: () => onRemove(i),
-              child: Container(
-                width: 20, height: 20,
-                decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    shape: BoxShape.circle),
-                child: const Icon(Icons.close_rounded,
-                    color: Colors.white, size: 12),
-              ),
-            ),
-          ),
-        ])),
-        // Upload slot
+        // ── Remote images ──────────────────────────
+        ...List.generate(remotePhotos.length, (i) => _buildItem(
+          image: NetworkImage(remotePhotos[i].url),
+          onRemove: () => onRemoveRemote(remotePhotos[i].id, i),
+        )),
+        
+        // ── Local images ───────────────────────────
+        ...List.generate(localPhotos.length, (i) => _buildItem(
+          image: FileImage(localPhotos[i]),
+          onRemove: () => onRemoveLocal(i),
+        )),
+
+        // ── Upload slot ────────────────────────────
         GestureDetector(
           onTap: onAdd,
           child: Container(
@@ -722,6 +790,32 @@ class _GalleryGrid extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Widget _buildItem({required ImageProvider image, required VoidCallback onRemove}) {
+    return Stack(children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          color: _kPrimary.withOpacity(0.10),
+          child: Image(image: image, fit: BoxFit.cover,
+              width: double.infinity, height: double.infinity),
+        ),
+      ),
+      Positioned(top: 4, right: 4,
+        child: GestureDetector(
+          onTap: onRemove,
+          child: Container(
+            width: 20, height: 20,
+            decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.close_rounded,
+                color: Colors.white, size: 12),
+          ),
+        ),
+      ),
+    ]);
   }
 }
 
@@ -969,12 +1063,21 @@ class _MapPickerSheetState extends State<_MapPickerSheet> {
 // SOURCE TILE
 // ══════════════════════════════════════════════════════════════
 class _SourceTile extends StatelessWidget {
-  final IconData icon; final String label; final VoidCallback onTap;
-  const _SourceTile({required this.icon, required this.label,
-    required this.onTap});
+  final IconData      icon;
+  final String        label;
+  final VoidCallback  onTap;
+  final bool          isDangerous;
+
+  const _SourceTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDangerous = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final color = isDangerous ? const Color(0xFFEF4444) : _kPrimary;
     return ScaleTap(
       onTap: onTap,
       child: Container(
@@ -987,12 +1090,13 @@ class _SourceTile extends StatelessWidget {
         child: Row(children: [
           Container(width: 38, height: 38,
               decoration: BoxDecoration(
-                  color: _kPrimary.withOpacity(0.10),
+                  color: color.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: _kPrimary, size: 18)),
+              child: Icon(icon, color: color, size: 18)),
           const SizedBox(width: 14),
-          Text(label, style: const TextStyle(fontFamily: 'Inter',
-              fontSize: 14, fontWeight: FontWeight.w600, color: _kTextDark)),
+          Text(label, style: TextStyle(fontFamily: 'Inter',
+              fontSize: 14, fontWeight: FontWeight.w600, 
+              color: isDangerous ? color : _kTextDark)),
           const Spacer(),
           const Icon(Icons.chevron_right_rounded,
               color: _kTextLight, size: 18),

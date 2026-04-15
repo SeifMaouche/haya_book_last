@@ -1,0 +1,43 @@
+\chapter{Conclusion Générale}
+
+\section{Contributions}
+
+Ce mémoire a présenté la conception et le développement complet de \textbf{HayaBook}, une plateforme mobile de réservation de services à la demande destinée au marché algérien. Les principales contributions de ce travail sont les suivantes :
+
+\begin{itemize}
+    \item La conception d'une architecture logicielle complète, modulaire et extensible, associant une application mobile Flutter multi-portail (client et prestataire), un serveur backend Node.js/Express avec Prisma ORM et PostgreSQL, et un tableau de bord d'administration React.
+    \item L'implémentation d'un système d'authentification sécurisé reposant sur JWT, la vérification par OTP et le hachage bcrypt, avec une séparation stricte des rôles (\texttt{CLIENT}, \texttt{PROVIDER}, \texttt{ADMIN}).
+    \item La conception et l'implémentation d'un moteur de réservation robuste, intégrant la vérification des chevauchements de créneaux en temps réel, la génération dynamique des disponibilités et un worker d'arrière-plan assurant les transitions automatiques de statuts (\texttt{CONFIRMED} $\rightarrow$ \texttt{IN\_PROGRESS} $\rightarrow$ \texttt{COMPLETED}).
+    \item L'intégration d'un système de communication en temps réel complet via Socket.io, couvrant la messagerie instantanée, les notifications de réservation et la synchronisation des interfaces utilisateur.
+    \item La mise en place d'un mécanisme de suppression douce (\textit{soft delete}) conforme aux exigences de protection des données personnelles, préservant l'intégrité des données historiques tout en anonymisant les informations personnelles.
+    \item Le développement d'un tableau de bord d'administration complet permettant la supervision de l'ensemble de la plateforme (utilisateurs, prestataires, réservations, catégories, support et revenus).
+\end{itemize}
+
+\section{Critique du travail}
+
+Malgré les avancées réalisées, ce projet présente certaines limitations qu'il convient de souligner honnêtement :
+
+\begin{itemize}
+    \item \textbf{Absence d'intégration de paiement} : Des écrans de paiement ont été conçus dans l'interface (carte bancaire, récapitulatif de paiement), mais aucune passerelle de paiement réelle (Stripe, Chargily, CIB) n'a été intégrée dans la version actuelle. Les prix affichés sont purement informatifs.
+    \item \textbf{Stockage de fichiers local} : Les images (photo de profil, portfolio) sont actuellement stockées sur le système de fichiers local du serveur dans le répertoire \texttt{public/uploads/}. Cette approche n'est pas adaptée à une mise en production à grande échelle.
+    \item \textbf{Notifications push} : Les notifications sont transmises via Socket.io uniquement lorsque l'application est ouverte et connectée. Les notifications push (Firebase Cloud Messaging) pour les applications en arrière-plan ou fermées ne sont pas encore implémentées.
+    \item \textbf{Tests automatisés} : La validation du système a été réalisée par des tests manuels. L'absence de tests unitaires et d'intégration automatisés réduit les garanties de non-régression lors des évolutions futures.
+    \item \textbf{Worker de statuts} : Le worker de transition automatique est implémenté via un \texttt{setInterval} de 60 secondes. Cette approche simple peut manquer de précision et de fiabilité sous forte charge.
+\end{itemize}
+
+\section{Travaux futurs et perspectives}
+
+Les extensions et améliorations envisagées pour HayaBook sont les suivantes :
+
+\begin{itemize}
+    \item \textbf{Intégration d'un système de paiement} : Intégrer la passerelle de paiement algérienne \textbf{Chargily} pour supporter les paiements par CIB, Edahabia et carte bancaire internationale.
+    \item \textbf{Migration vers le stockage cloud} : Remplacer le stockage local par un service de stockage d'objets cloud tel qu'\textbf{AWS S3} ou \textbf{Cloudflare R2} pour garantir la durabilité, la disponibilité et la scalabilité des médias.
+    \item \textbf{Notifications push (FCM)} : Intégrer \textbf{Firebase Cloud Messaging} pour les notifications push natives sur Android et iOS, même lorsque l'application est fermée.
+    \item \textbf{File de tâches (job queue)} : Remplacer le worker \texttt{setInterval} par une file de tâches robuste basée sur \textbf{BullMQ} et Redis pour des transitions de statuts plus précises et fiables.
+    \item \textbf{Recherche avancée} : Intégrer un moteur de recherche plein texte tel que \textbf{Meilisearch} ou utiliser les fonctionnalités de recherche full-text de PostgreSQL pour améliorer la pertinence des résultats de recherche.
+    \item \textbf{Extension iOS} : Tester et publier l'application sur l'App Store d'Apple en complément de Google Play.
+    \item \textbf{Tests automatisés} : Mettre en place une suite de tests unitaires (Jest pour le backend, flutter\_test pour l'application mobile) et des tests d'intégration via des outils comme Supertest.
+    \item \textbf{Géolocalisation avancée} : Intégrer \textbf{PostGIS} pour effectuer les calculs de distance directement en base de données, permettant de gérer un volume de prestataires beaucoup plus important de manière efficace.
+\end{itemize}
+
+En conclusion, HayaBook constitue une base solide et fonctionnelle pour une plateforme de réservation de services à la demande en Algérie. La qualité de son architecture, la richesse de ses fonctionnalités et la rigueur de son implémentation ouvrent la voie à une mise en production progressive et à un développement continu.

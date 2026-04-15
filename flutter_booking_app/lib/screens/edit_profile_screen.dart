@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
+import '../config/app_config.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/haya_avatar.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({Key? key}) : super(key: key);
@@ -22,6 +24,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _bioCtrl;
 
   File?  _newPhoto;    // newly picked photo (not yet saved)
+  bool   _removePhoto = false; // flag to remove photo
   bool   _hasChanges = false;
 
   final _picker = ImagePicker();
@@ -49,22 +52,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // ── Pick photo ────────────────────────────────────────────────
   Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
+    final result = await showModalBottomSheet<dynamic>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => _SourceSheet(),
     );
-    if (source == null) return;
-    try {
-      final img = await _picker.pickImage(
-          source: source, maxWidth: 512, imageQuality: 85);
-      if (img != null && mounted) {
-        setState(() {
-          _newPhoto   = File(img.path);
-          _hasChanges = true;
-        });
-      }
-    } catch (_) {}
+    if (result == null) return;
+
+    if (result is String && result == 'remove') {
+      setState(() {
+        _newPhoto = null;
+        _removePhoto = true;
+        _hasChanges = true;
+      });
+      return;
+    }
+
+    if (result is ImageSource) {
+      try {
+        final img = await _picker.pickImage(
+            source: result, maxWidth: 512, imageQuality: 85);
+        if (img != null && mounted) {
+          setState(() {
+            _newPhoto   = File(img.path);
+            _removePhoto = false;
+            _hasChanges = true;
+          });
+        }
+      } catch (_) {}
+    }
   }
 
   // ── Save all ──────────────────────────────────────────────────
@@ -78,6 +94,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       phone:     _phoneCtrl.text,
       bio:       _bioCtrl.text,
       photoPath: _newPhoto?.path, // ← saves new photo path if picked
+      removePhoto: _removePhoto,
     );
 
     if (!mounted) return;
@@ -110,9 +127,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(builder: (_, auth, __) {
-      // Show new picked photo first, then existing saved photo, then initials
-      final photoPath  = _newPhoto?.path ?? auth.photoPath;
-      final initial    = (auth.userName ?? 'U')[0].toUpperCase();
+      // Logic for preview:
+      // If we flagged removal, show null (gradient)
+      // Else if we picked a new file, show that
+      // Else show existing saved photo
+      String? displayPhoto;
+      if (_removePhoto) {
+        displayPhoto = 'default';
+      } else if (_newPhoto != null) {
+        displayPhoto = _newPhoto!.path;
+      } else {
+        displayPhoto = auth.photoPath;
+      }
 
       return Scaffold(
         backgroundColor: AppColors.background,
@@ -156,22 +182,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   child: Stack(children: [
                     // Circle avatar
                     Container(
-                      width: 100, height: 100,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
                             color: AppColors.primaryLight, width: 3),
                       ),
                       child: ClipOval(
-                        child: photoPath != null
-                        // Real photo
-                            ? Image.file(File(photoPath),
-                            fit: BoxFit.cover,
-                            width: 100, height: 100,
-                            errorBuilder: (_, __, ___) =>
-                                _initialsAvatar(initial))
-                        // Initials fallback
-                            : _initialsAvatar(initial),
+                        child: _newPhoto != null
+                            ? Image.file(
+                                _newPhoto!,
+                                fit: BoxFit.cover,
+                                width: 100,
+                                height: 100,
+                              )
+                            : HayaAvatar(
+                                avatarUrl: displayPhoto,
+                                size: 100,
+                                borderRadius: 99,
+                              ),
                       ),
                     ),
                     // Camera badge
@@ -281,15 +309,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
-  Widget _initialsAvatar(String initial) {
-    return Container(
-      color: AppColors.primary,
-      child: Center(child: Text(initial, style: const TextStyle(
-        fontFamily: 'Inter', fontSize: 38,
-        fontWeight: FontWeight.w700, color: Colors.white,
-      ))),
-    );
-  }
 
   Widget _sectionLabel(String label) {
     return Text(label, style: const TextStyle(
@@ -383,15 +402,19 @@ class _SourceSheet extends StatelessWidget {
         const SizedBox(height: 10),
         _tile(context, Icons.photo_library_rounded,
             'Choose from Gallery', ImageSource.gallery),
+        const SizedBox(height: 10),
+        _tile(context, Icons.delete_outline_rounded,
+            'Remove Photo', 'remove', isDangerous: true),
         const SizedBox(height: 8),
       ]),
     );
   }
 
   Widget _tile(BuildContext ctx, IconData icon, String label,
-      ImageSource source) {
+      dynamic result, {bool isDangerous = false}) {
+    final color = isDangerous ? const Color(0xFFEF4444) : const Color(0xFF7C3AED);
     return GestureDetector(
-      onTap: () => Navigator.pop(ctx, source),
+      onTap: () => Navigator.pop(ctx, result),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
@@ -402,13 +425,13 @@ class _SourceSheet extends StatelessWidget {
         child: Row(children: [
           Container(width: 38, height: 38,
               decoration: BoxDecoration(
-                  color: const Color(0xFF7C3AED).withOpacity(0.10),
+                  color: color.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: const Color(0xFF7C3AED), size: 18)),
+              child: Icon(icon, color: color, size: 18)),
           const SizedBox(width: 14),
-          Text(label, style: const TextStyle(fontFamily: 'Inter',
+          Text(label, style: TextStyle(fontFamily: 'Inter',
               fontSize: 14, fontWeight: FontWeight.w600,
-              color: Color(0xFF111827))),
+              color: isDangerous ? color : const Color(0xFF111827))),
           const Spacer(),
           const Icon(Icons.chevron_right_rounded,
               color: Color(0xFF9CA3AF), size: 18),

@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/provider_state.dart';
+import '../../providers/provider_profile_provider.dart';
 import '../../widgets/provider_bottom_nav_bar.dart';
+import '../../widgets/haya_avatar.dart';
+import '../../providers/auth_provider.dart';
 
 // ─── Design tokens ────────────────────────────────────────────
 const _kPrimary     = Color(0xFF7C3AED);
@@ -16,8 +19,23 @@ const _kTextDark    = Color(0xFF111827);
 const _kTextMuted   = Color(0xFF6B7280);
 const _kBorder      = Color(0xFFE5E7EB);
 
-class ProviderProfileScreen extends StatelessWidget {
+class ProviderProfileScreen extends StatefulWidget {
   const ProviderProfileScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ProviderProfileScreen> createState() => _ProviderProfileScreenState();
+}
+
+class _ProviderProfileScreenState extends State<ProviderProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch provider data on screen entry (both providers)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ProviderStateProvider>(context, listen: false).loadInitialData();
+      Provider.of<ProviderProfileProvider>(context, listen: false).loadProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +72,8 @@ class ProviderProfileScreen extends StatelessWidget {
                 child: Consumer<ProviderStateProvider>(
                   builder: (_, ps, __) {
                     final stats = ps.stats;
+                    final profile = ps.profile;
+                    
                     return ListView(
                       padding: EdgeInsets.fromLTRB(
                           20, 24, 20,
@@ -61,7 +81,11 @@ class ProviderProfileScreen extends StatelessWidget {
                       physics: const BouncingScrollPhysics(),
                       children: [
                         // ── Profile section ──────────────
-                        _ProfileSection(stats: stats),
+                        _ProfileSection(
+                          stats: stats,
+                          businessName: profile?.name ?? 'HayaBook Provider',
+                          category: profile?.category ?? 'Service Provider',
+                        ),
                         const SizedBox(height: 24),
 
                         // ── Stats row ────────────────────
@@ -110,7 +134,7 @@ class ProviderProfileScreen extends StatelessWidget {
         ],
       ),
       bottomNavigationBar:
-      const ProviderBottomNavBar(currentIndex: 3),
+      const ProviderBottomNavBar(currentIndex: 4),
     );
   }
 }
@@ -133,11 +157,11 @@ class _StickyHeader extends StatelessWidget {
               bottom: BorderSide(color: Color(0xFFF3F4F6), width: 1),
             ),
           ),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Logo text
-              const Text('HayaBook',
+              Text('HayaBook',
                   style: TextStyle(
                     fontFamily:    'Inter',
                     fontSize:      22,
@@ -145,16 +169,6 @@ class _StickyHeader extends StatelessWidget {
                     color:         _kPrimary,
                     letterSpacing: -0.3,
                   )),
-              // Bell button
-              Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color:        _kPrimary.withOpacity(0.05),
-                  shape:        BoxShape.circle,
-                ),
-                child: const Icon(Icons.notifications_outlined,
-                    color: _kPrimary, size: 22),
-              ),
             ],
           ),
         ),
@@ -168,18 +182,24 @@ class _StickyHeader extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 class _ProfileSection extends StatelessWidget {
   final dynamic stats;
-  const _ProfileSection({required this.stats});
+  final String businessName;
+  final String category;
+  
+  const _ProfileSection({
+    required this.stats,
+    required this.businessName,
+    required this.category,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Avatar
+        // Avatar with HayaAvatar System
         Stack(
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: 128, height: 128,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
@@ -194,11 +214,12 @@ class _ProfileSection extends StatelessWidget {
                   ),
                 ],
               ),
-              child: ClipOval(
-                child: Container(
-                  color: const Color(0xFFEDE9FE),
-                  child: const Icon(Icons.person_rounded,
-                      color: _kPrimary, size: 58),
+              child: Consumer<AuthProvider>(
+                builder: (_, auth, __) => HayaAvatar(
+                  avatarUrl: auth.photoPath,
+                  size: 120,
+                  borderRadius: 99,
+                  isProvider: true,
                 ),
               ),
             ),
@@ -226,8 +247,9 @@ class _ProfileSection extends StatelessWidget {
         const SizedBox(height: 16),
 
         // Name
-        const Text('HayaBook Provider',
-            style: TextStyle(
+        Text(businessName,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               fontFamily:    'Inter',
               fontSize:      24,
               fontWeight:    FontWeight.w700,
@@ -237,8 +259,9 @@ class _ProfileSection extends StatelessWidget {
         const SizedBox(height: 4),
 
         // Category
-        const Text('Beauty & Wellness',
-            style: TextStyle(
+        Text(category,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
               fontFamily:  'Inter',
               fontSize:    15,
               fontWeight:  FontWeight.w500,
@@ -263,7 +286,7 @@ class _ProfileSection extends StatelessWidget {
                   color: Color(0xFFCA8A04), size: 16),
               const SizedBox(width: 5),
               Text(
-                '${stats.rating} RATING',
+                '${stats.rating.toStringAsFixed(1)} RATING',
                 style: const TextStyle(
                   fontFamily:    'Inter',
                   fontSize:      12,
@@ -304,15 +327,15 @@ class _StatsRow extends StatelessWidget {
           child: Row(
             children: [
               _StatItem(
-                  value: '1.2k',
-                  label: 'BOOKINGS'),
+                  value: '${stats.todayBookings}',
+                  label: 'TODAY'),
               _VerticalDivider(),
               _StatItem(
-                  value: '${stats.rating}',
+                  value: '${stats.rating.toStringAsFixed(1)}',
                   label: 'RATING'),
               _VerticalDivider(),
               _StatItem(
-                  value: '2.4k',
+                  value: '${stats.totalReviews}',
                   label: 'REVIEWS'),
             ],
           ),

@@ -1,0 +1,110 @@
+\chapter{État de l'art}
+
+\section{Introduction}
+
+Ce chapitre présente un panorama des technologies et des solutions existantes dans le domaine des plateformes de réservation de services à la demande. Nous analysons d'abord les plateformes commerciales existantes similaires à HayaBook, puis nous passons en revue les technologies choisies pour le développement du système.
+
+\section{Plateformes de réservation existantes}
+
+Plusieurs plateformes de mise en relation ont vu le jour ces dernières années à l'échelle internationale. Parmi les plus connues, nous pouvons citer :
+
+\begin{itemize}
+    \item \textbf{Planity} : Plateforme française de réservation en ligne dédiée aux salons de coiffure et instituts de beauté. Elle permet aux clients de réserver des créneaux directement depuis une application mobile, et offre aux prestataires un agenda numérique et des outils de gestion.
+    \item \textbf{Treatwell} : Plateforme européenne similaire à Planity, couvrant un plus large éventail de services de bien-être et de beauté.
+    \item \textbf{Doctolib} : Solution de réservation médicale en ligne, très répandue en France et en Europe, permettant aux patients de prendre rendez-vous avec des professionnels de santé.
+    \item \textbf{Fiverr / Upwork} : Plateformes de mise en relation pour les services freelance, qui, bien que non axées sur la réservation de créneaux physiques, illustrent le modèle de marché biface (\textit{two-sided marketplace}).
+\end{itemize}
+
+En Algérie, les équivalents locaux restent rares et peu matures techniquement. HayaBook vise à combler ce vide en proposant une solution adaptée au contexte local, supportant les langues arabe, française et anglaise.
+
+\section{Développement d'applications mobiles}
+
+\subsection{Approches de développement mobile}
+
+On distingue trois grandes approches pour le développement d'applications mobiles \cite{flutter_book}:
+
+\begin{enumerate}
+    \item \textbf{Développement natif} : Développement séparé pour iOS (Swift/Objective-C) et Android (Kotlin/Java). Offre les meilleures performances, mais nécessite deux bases de code distinctes.
+    \item \textbf{Applications web progressives (PWA)} : Applications web accessibles via un navigateur mobile. Limitées dans l'accès aux fonctionnalités matérielles du téléphone.
+    \item \textbf{Développement multiplateforme} : Un seul code source compilé pour plusieurs plateformes. C'est l'approche retenue dans ce projet.
+\end{enumerate}
+
+\subsection{Flutter}
+
+\textbf{Flutter} est un kit de développement d'interface utilisateur (« SDK ») open source créé par Google, permettant de construire des applications compilées nativement pour mobile, web et bureau à partir d'une seule base de code en langage \textbf{Dart} \cite{flutter_docs}.
+
+Les avantages qui ont motivé notre choix de Flutter sont :
+
+\begin{itemize}
+    \item Un rendu graphique haute performance grâce au moteur graphique \textbf{Skia/Impeller}, indépendant des composants natifs de chaque plateforme.
+    \item Un rechargement à chaud (\textit{hot reload}) accélérant le cycle de développement.
+    \item Une communauté active et une riche bibliothèque de \textit{packages} disponibles via \textbf{pub.dev}.
+    \item La gestion d'état via le package \textbf{Provider} (pattern \textit{ChangeNotifier}), permettant une architecture claire et testable.
+\end{itemize}
+
+\subsection{Gestion d'état avec Provider}
+
+La gestion d'état est un aspect critique dans toute application mobile complexe. Nous avons opté pour le package \textbf{provider} (version 6.0), qui implémente le patron de conception \textit{Observer} à travers la classe \texttt{ChangeNotifier}. Chaque fournisseur d'état encapsule une partie de la logique métier et notifie les \textit{widgets} qui l'écoutent lors de tout changement d'état.
+
+\section{Technologies backend}
+
+\subsection{Node.js et Express.js}
+
+\textbf{Node.js} est un environnement d'exécution JavaScript côté serveur, basé sur le moteur V8 de Chrome. Il est particulièrement adapté au développement de serveurs à haute concurrence grâce à son architecture événementielle non bloquante (\textit{event-driven, non-blocking I/O}).
+
+\textbf{Express.js} est un framework web minimaliste et flexible pour Node.js, largement utilisé pour la construction d'API REST \cite{nodejs_express}. Dans ce projet, nous utilisons Express version 5.2.1 avec TypeScript pour bénéficier du typage statique et de la détection d'erreurs à la compilation.
+
+\subsection{Prisma ORM}
+
+\textbf{Prisma} est un ORM (« Object-Relational Mapper ») de nouvelle génération pour Node.js et TypeScript. Il génère automatiquement un client typé à partir d'un schéma déclaratif (\texttt{schema.prisma}), ce qui élimine une grande partie des erreurs liées aux requêtes SQL manuelles \cite{prisma_docs}.
+
+Les avantages de Prisma dans ce projet :
+\begin{itemize}
+    \item Génération automatique de types TypeScript correspondant aux modèles de la base de données.
+    \item API de requête intuitive et fluide (ex. : \texttt{prisma.user.findMany(\{where: \{isActive: true\}\})}).
+    \item Support des transactions atomiques via \texttt{prisma.\$transaction([...])}.
+    \item Migrations de schéma gérées via la commande \texttt{prisma db push}.
+\end{itemize}
+
+\subsection{PostgreSQL}
+
+\textbf{PostgreSQL} est un système de gestion de bases de données relationnelles (SGBDR) open source, reconnu pour sa robustesse, son respect des standards SQL et ses fonctionnalités avancées telles que le support des types JSON, les contraintes d'intégrité référentielle et les transactions ACID \cite{postgresql_docs}.
+
+\subsection{Socket.io}
+
+\textbf{Socket.io} est une bibliothèque JavaScript qui permet une communication bidirectionnelle en temps réel entre un serveur et des clients. Elle repose sur le protocole \textbf{WebSocket} avec un mécanisme de repli (\textit{fallback}) vers le \textit{long polling} HTTP pour les environnements qui ne supportent pas WebSocket nativement \cite{socketio_docs}.
+
+Dans HayaBook, Socket.io est utilisé pour :
+\begin{itemize}
+    \item La messagerie instantanée entre clients et prestataires.
+    \item Les notifications en temps réel (nouvelles réservations, mises à jour de statut).
+    \item La synchronisation automatique des interfaces lors des transitions de statuts de réservation.
+\end{itemize}
+
+\section{Technologies frontend (tableau de bord d'administration)}
+
+\subsection{React}
+
+\textbf{React} est une bibliothèque JavaScript open source développée par Meta, utilisée pour la construction d'interfaces utilisateur interactives basées sur une architecture en composants. Chaque composant React encapsule sa propre logique d'affichage et peut maintenir un état local \cite{react_docs}.
+
+\subsection{TanStack React Query}
+
+\textbf{React Query} (désormais TanStack Query) est une bibliothèque de gestion de l'état serveur dans les applications React. Elle gère automatiquement le cache, le rechargement des données, les états de chargement et d'erreur, et le \textit{polling} automatique \cite{reactquery_docs}.
+
+\subsection{Recharts}
+
+\textbf{Recharts} est une bibliothèque de visualisation de données pour React, construite sur D3.js. Elle est utilisée dans le tableau de bord pour afficher des graphiques en courbes (revenus mensuels) et des graphiques circulaires (distribution des catégories).
+
+\section{Sécurité}
+
+\subsection{Authentification JWT}
+
+L'authentification dans HayaBook repose sur les \textbf{JSON Web Tokens} (JWT). Lors de la connexion, le serveur génère un token signé avec une clé secrète (\texttt{JWT\_SECRET}) et une durée de validité de 7 jours. Ce token est stocké côté client dans un stockage sécurisé chiffré (\texttt{flutter\_secure\_storage}) et transmis dans l'en-tête \texttt{Authorization: Bearer <token>} à chaque requête.
+
+\subsection{Hachage des mots de passe}
+
+Les mots de passe des utilisateurs sont hachés avant leur stockage en base de données en utilisant l'algorithme \textbf{bcrypt} avec un facteur de coût (« salt rounds ») de 10, conformément aux bonnes pratiques de sécurité.
+
+\section{Conclusion}
+
+Ce chapitre a permis de dresser un panorama des solutions existantes et des technologies adoptées pour le développement de HayaBook. On constate que le choix de Flutter, Node.js, Prisma et PostgreSQL offre un excellent équilibre entre performance, maintenabilité et rapidité de développement. Le chapitre suivant présente l'architecture globale du système ainsi que la conception détaillée de ses composants.

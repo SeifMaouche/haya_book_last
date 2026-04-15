@@ -7,6 +7,7 @@ import '../../providers/provider_state.dart';
 import '../../models/provider_models.dart';
 import '../../widgets/provider_bottom_nav_bar.dart';
 import '../../widgets/glass_kit.dart';
+import '../../widgets/haya_avatar.dart';
 
 const _kPrimary     = Color(0xFF7C3AED);
 const _kPrimaryDeep = Color(0xFF6D28D9);
@@ -47,6 +48,11 @@ class _ProviderBookingsScreenState extends State<ProviderBookingsScreen>
       statusBarColor:          Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ));
+
+    // Fetch provider bookings/stats/profile
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ProviderStateProvider>(context, listen: false).loadInitialData();
+    });
   }
 
   @override
@@ -486,39 +492,32 @@ class _CancelledTab extends StatelessWidget {
         subtitle: 'Cancelled and no-show appointments will appear here',
       );
 
-      // Split into two groups for visual separation
       final noShows   = bookings.where((b) => b.cancelReason == CancelReason.noShow).toList();
-      final cancelled = bookings.where((b) => b.cancelReason != CancelReason.noShow).toList();
+      final byClient  = bookings.where((b) => b.cancelReason == CancelReason.byClient).toList();
+      final byYou     = bookings.where((b) => b.cancelReason == CancelReason.byProvider).toList();
+      final other     = bookings.where((b) => b.cancelReason == null).toList();
 
       return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 120),
         children: [
           if (noShows.isNotEmpty) ...[
-            _SectionHeader(
-              left:       'NO-SHOWS',
-              right:      '${noShows.length} TOTAL',
-              leftColor:  _kRed,
-            ),
-            ...noShows.map((b) => _BookingCard(
-              booking:    b,
-              badgeLabel: 'No Show',
-              badgeColor: _kRed,
-              badgeBg:    _kRedBg,
-              isNoShow:   true,
-            )),
-            if (cancelled.isNotEmpty) const SizedBox(height: 8),
+            _SectionHeader(left: 'NO-SHOWS', right: '${noShows.length} TOTAL', leftColor: _kRed),
+            ...noShows.map((b) => _BookingCard(booking: b, badgeLabel: 'No Show', badgeColor: _kRed, badgeBg: _kRedBg, isNoShow: true)),
+            const SizedBox(height: 12),
           ],
-          if (cancelled.isNotEmpty) ...[
-            _SectionHeader(
-              left:  'CANCELLED BY YOU',
-              right: '${cancelled.length} TOTAL',
-            ),
-            ...cancelled.map((b) => _BookingCard(
-              booking:    b,
-              badgeLabel: 'Cancelled',
-              badgeColor: _kRed,
-              badgeBg:    _kRedBg,
-            )),
+          if (byClient.isNotEmpty) ...[
+            _SectionHeader(left: 'CANCELLED BY CLIENT', right: '${byClient.length} TOTAL', leftColor: _kPrimary),
+            ...byClient.map((b) => _BookingCard(booking: b, badgeLabel: 'Cancelled', badgeColor: _kRed, badgeBg: _kRedBg)),
+            const SizedBox(height: 12),
+          ],
+          if (byYou.isNotEmpty) ...[
+            _SectionHeader(left: 'CANCELLED BY YOU', right: '${byYou.length} TOTAL'),
+            ...byYou.map((b) => _BookingCard(booking: b, badgeLabel: 'Cancelled', badgeColor: _kRed, badgeBg: _kRedBg)),
+            const SizedBox(height: 12),
+          ],
+          if (other.isNotEmpty) ...[
+            _SectionHeader(left: 'OTHER CANCELLED', right: '${other.length} TOTAL'),
+            ...other.map((b) => _BookingCard(booking: b, badgeLabel: 'Cancelled', badgeColor: _kRed, badgeBg: _kRedBg)),
           ],
         ],
       );
@@ -617,13 +616,13 @@ class _BookingCard extends StatelessWidget {
               child: Row(children: [
                 // Avatar
                 Stack(children: [
-                  ClipOval(child: Container(
-                    width: 46, height: 46,
-                    color: const Color(0xFFEDE9FE),
-                    child: Icon(Icons.person_rounded,
-                        color: isNoShow ? _kRed.withOpacity(0.60) : _kPrimary,
-                        size: 23),
-                  )),
+                  HayaAvatar(
+                    avatarUrl:    b.clientAvatar,
+                    name:         b.clientName,
+                    size:         46,
+                    borderRadius: 99,
+                    isProvider:   true,
+                  ),
                   if (b.clientOnline &&
                       b.status == ProviderBookingStatus.upcoming)
                     Positioned(bottom: 1, right: 1,
@@ -787,7 +786,8 @@ class _ScheduleView extends StatelessWidget {
       builder: (_, ps, __) {
         final dayBookings = ps.upcomingBookings.where((b) =>
         b.bookingDate.day   == selectedDate.day &&
-            b.bookingDate.month == selectedDate.month).toList();
+            b.bookingDate.month == selectedDate.month &&
+            b.bookingDate.year  == selectedDate.year).toList();
 
         final now      = DateTime.now();
         final isToday  = selectedDate.day   == now.day &&
@@ -857,52 +857,53 @@ class _ScheduleView extends StatelessWidget {
                 ]),
           ),
           Positioned(
-            bottom: 82, left: 16, right: 16,
-            child: Row(children: [
-              Expanded(child: ScaleTap(
-                onTap: () => Navigator.pushNamed(
-                    context, '/provider/availability'),
+            bottom: 84, left: 18, right: 18,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: Container(
-                  height: 50,
+                  height: 64,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(
-                        color: _kPrimary.withOpacity(0.08),
-                        blurRadius: 14, offset: const Offset(0, 4))],
+                    color: Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
+                    boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 8))],
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.block_rounded, color: _kPrimary, size: 18),
-                      SizedBox(width: 8),
-                      Text('Block Time', style: TextStyle(
-                        fontFamily: 'Inter', fontSize: 14,
-                        fontWeight: FontWeight.w700, color: _kPrimary,
-                      )),
-                    ],
-                  ),
-                ),
-              )),
-              const SizedBox(width: 12),
-              ScaleTap(
-                onTap: () => Navigator.pushNamed(
-                    context, '/provider/add-service'),
-                child: Container(
-                  width: 50, height: 50,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF8B5CF6), _kPrimaryDeep]),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [BoxShadow(
-                        color: _kPrimary.withOpacity(0.40),
-                        blurRadius: 14, offset: const Offset(0, 5))],
-                  ),
-                  child: const Icon(Icons.add_rounded,
-                      color: Colors.white, size: 28),
+                  child: Row(children: [
+                    Expanded(child: ScaleTap(
+                      onTap: () => Navigator.pushNamed(context, '/provider/availability'),
+                      child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: _kPrimary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.block_rounded, color: _kPrimary, size: 16),
+                          SizedBox(width: 8),
+                          Text('Block Time', style: TextStyle(fontFamily: 'Inter', fontSize: 13, fontWeight: FontWeight.w700, color: _kPrimary)),
+                        ]),
+                      ),
+                    )),
+                    const SizedBox(width: 12),
+                    ScaleTap(
+                      onTap: () => Navigator.pushNamed(context, '/provider/add-service'),
+                      child: Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [_kLavender, _kPrimary]),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [BoxShadow(color: _kPrimary.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                        ),
+                        child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
-            ]),
+            ),
           ),
         ]);
       },
@@ -979,22 +980,27 @@ class _ApptBlock extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(booking.serviceName,
                     maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontFamily: 'Inter', fontSize: 13,
-                        fontWeight: FontWeight.w700, color: _kTextDark)),
-                const SizedBox(height: 3),
-                Text('${booking.clientName} • ${booking.timeSlot}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontFamily: 'Inter', fontSize: 11,
-                        color: _kTextMuted.withOpacity(0.85))),
-                if (height > 80) ...[
-                  const SizedBox(height: 4),
-                  Text('DZD ${booking.price.toStringAsFixed(0)}',
-                      style: TextStyle(fontFamily: 'Inter', fontSize: 11,
+                    style: const TextStyle(fontFamily: 'Inter', fontSize: 12,
+                        fontWeight: FontWeight.w800, color: _kTextDark)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  HayaAvatar(avatarUrl: booking.clientAvatar, name: booking.clientName, size: 16, borderRadius: 99, isProvider: false),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(booking.clientName,
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 10,
                           fontWeight: FontWeight.w600,
-                          color: _kPrimary.withOpacity(0.80))),
+                          color: _kTextMuted.withOpacity(0.90)))),
+                ]),
+                if (height > 65) ...[
+                  const SizedBox(height: 4),
+                  Text(booking.timeSlot,
+                      style: TextStyle(fontFamily: 'Inter', fontSize: 10,
+                          color: _kPrimary.withOpacity(0.85))),
                 ],
               ],
             )),

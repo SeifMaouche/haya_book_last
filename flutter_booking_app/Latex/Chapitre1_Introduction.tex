@@ -1,0 +1,49 @@
+\chapter{Introduction Générale}
+
+La transformation numérique des habitudes de consommation a profondément modifié la manière dont les individus accèdent aux services du quotidien. Aujourd'hui, la réservation en ligne d'un rendez-vous chez un coiffeur, un médecin ou un tuteur est devenue une nécessité, notamment pour les jeunes générations connectées. En Algérie, ce secteur reste largement sous-exploité sur le plan des solutions numériques locales, laissant un vide que ce projet cherche à combler.
+
+\section{Contexte}
+
+Le projet \textbf{HayaBook} s'inscrit dans le contexte de la montée en puissance des plateformes de mise en relation à la demande, communément appelées plateformes « on-demand ». Ces plateformes permettent à des clients de localiser, comparer et réserver des prestataires de services de manière rapide et sécurisée, depuis leurs dispositifs mobiles.
+
+En Algérie, la majorité des prestataires de services locaux (salons de coiffure, cabinets médicaux, cours particuliers) fonctionnent encore à base de rendez-vous téléphoniques ou de files d'attente physiques. Ce manque de digitalisation entraîne une mauvaise gestion du temps pour les deux parties, une absence de visibilité pour les prestataires, et une expérience client dégradée.
+
+Face à ce constat, le projet HayaBook propose une solution complète et moderne : une application mobile multiplateforme développée avec \textbf{Flutter}, un serveur backend robuste en \textbf{Node.js} avec l'ORM \textbf{Prisma} et une base de données \textbf{PostgreSQL}, ainsi qu'un tableau de bord d'administration en \textbf{React}.
+
+\section{Objectifs}
+
+Les objectifs principaux de ce projet sont les suivants :
+
+\begin{enumerate}
+    \item Développer une application mobile permettant à des clients de rechercher, filtrer et réserver des prestataires de services en temps réel.
+    \item Offrir aux prestataires un portail dédié permettant de gérer leurs services, leur disponibilité, leurs réservations et leurs revenus.
+    \item Concevoir et implémenter un serveur backend RESTful sécurisé, capable de gérer l'authentification, les réservations, la messagerie, les avis et les notifications.
+    \item Mettre en place un tableau de bord d'administration centralisé pour superviser l'ensemble de la plateforme.
+    \item Assurer la communication en temps réel entre les utilisateurs grâce à la technologie \textbf{Socket.io}.
+    \item Garantir la sécurité des données via l'authentification par \textbf{JWT} (« JSON Web Token ») et le hachage des mots de passe avec \textbf{bcrypt}.
+\end{enumerate}
+
+\section{Méthodologie et résultats}
+
+Pour mener à bien ce projet, nous avons adopté une approche itérative inspirée des méthodes agiles. Chaque fonctionnalité (authentification, réservation, messagerie, notifications) a été conçue, implémentée et testée de manière indépendante, avant d'être intégrée à l'ensemble du système.
+
+Les principaux résultats obtenus sont :
+
+\begin{itemize}
+    \item Une application mobile Flutter fonctionnelle, couvrant un portail client et un portail prestataire, avec 43 écrans distincts.
+    \item Un serveur backend Node.js exposant plus de 50 endpoints REST, structurés en 11 modules de routes.
+    \item Un système de réservation complet avec gestion des créneaux, vérification des chevauchements et transitions automatiques de statuts via un « worker » en arrière-plan.
+    \item Un tableau de bord d'administration React permettant la gestion des utilisateurs, prestataires, réservations, catégories et tickets de support.
+    \item Un système de messagerie instantanée et de notifications en temps réel basé sur \textbf{Socket.io}.
+\end{itemize}
+
+\section{Structure du rapport}
+
+La suite de ce rapport est organisée comme suit :
+
+\begin{itemize}
+    \item Le \textbf{Chapitre 2} présente l'état de l'art des technologies et des solutions existantes dans le domaine des plateformes de réservation et du développement mobile.
+    \item Le \textbf{Chapitre 3} décrit l'architecture globale du système, le schéma de la base de données et la conception de l'API REST.
+    \item Le \textbf{Chapitre 4} détaille l'implémentation des différents composants du système et présente les résultats obtenus.
+    \item Le \textbf{Chapitre 5} conclut ce rapport en résumant les contributions du projet et en proposant des pistes d'amélioration et des perspectives futures.
+\end{itemize}

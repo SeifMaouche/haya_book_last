@@ -1,12 +1,16 @@
 // lib/screens/messages_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../providers/chat_provider.dart';
+import '../providers/auth_provider.dart';
+import '../config/app_config.dart';
+import '../widgets/haya_avatar.dart';
+import '../config/theme.dart';
+import '../widgets/glass_kit.dart';
+import '../widgets/bottom_nav_bar.dart';
 import 'chat_screen.dart';
-
-const _kPrimary = Color(0xFF7C3AED);
-const _kBg = Color(0xFFF5F3FF);
-const _kTextDark = Color(0xFF1F2937);
-const _kTextMuted = Color(0xFF6B7280);
+import 'package:intl/intl.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({Key? key}) : super(key: key);
@@ -18,53 +22,13 @@ class MessagesScreen extends StatefulWidget {
 class _MessagesScreenState extends State<MessagesScreen> {
   final _searchCtrl = TextEditingController();
 
-  final List<Map<String, dynamic>> _conversations = [
-    {
-      'id': '1',
-      'name': 'Dr. Samy',
-      'avatar': 'assets/images/doc.png',
-      'lastMessage': 'Your appointment is confirmed...',
-      'time': '2H AGO',
-      'unread': 1,
-      'isOnline': true,
-    },
-    {
-      'id': '2',
-      'name': "Lina's Salon",
-      'avatar': 'assets/images/salon.png',
-      'lastMessage': "See you at 3 PM today! Don't forget...",
-      'time': '5H AGO',
-      'unread': 0,
-      'isOnline': false,
-    },
-    {
-      'id': '3',
-      'name': 'Fitness Pro',
-      'avatar': 'assets/images/fitness.png',
-      'lastMessage': 'Can we reschedule our person...',
-      'time': 'YESTERDAY',
-      'unread': 3,
-      'isOnline': false,
-    },
-    {
-      'id': '4',
-      'name': 'Chef Alex',
-      'avatar': 'assets/images/chef.png',
-      'lastMessage': "I've sent the menu options for your e...",
-      'time': 'TUE',
-      'unread': 0,
-      'isOnline': false,
-    },
-    {
-      'id': '5',
-      'name': 'Clean Masters',
-      'avatar': 'assets/images/cleaning.png',
-      'lastMessage': "Thanks for your feedback! We're gla...",
-      'time': 'MON',
-      'unread': 0,
-      'isOnline': false,
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ChatProvider>(context, listen: false).fetchMyConversations();
+    });
+  }
 
   @override
   void dispose() {
@@ -74,322 +38,233 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final chat = Provider.of<ChatProvider>(context);
+
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
     ));
 
     return Scaffold(
-      backgroundColor: _kBg,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Header ────────────────────────────────────
-            _MessagesHeader(),
-            const SizedBox(height: 16),
+      backgroundColor: const Color(0xFFFBFBFF),
+      body: Column(
+        children: [
+          // ── Premium Header ──────────────────────────────────
+          GlassHeader(
+            title: 'Messages',
+            subtitle: chat.conversations.isEmpty 
+                ? 'No active chats' 
+                : '${chat.conversations.length} active conversations',
+            bottom: _SearchBar(controller: _searchCtrl),
+          ),
 
-            // ── Search Bar ────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _SearchBar(controller: _searchCtrl),
-            ),
-            const SizedBox(height: 20),
-
-            // ── Conversations List ────────────────────────
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _conversations.length,
-                itemBuilder: (_, i) => _ConversationTile(
-                  conversation: _conversations[i],
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          providerName: _conversations[i]['name'] as String,
-                          providerAvatar: _conversations[i]['avatar'] as String,
-                        ),
+          // ── List ────────────────────────────────────────────
+          Expanded(
+            child: chat.isLoading && chat.conversations.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                : chat.conversations.isEmpty
+                    ? _EmptyState()
+                    : ListView.builder(
+                        physics: const BouncingScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
+                        itemCount: chat.conversations.length,
+                        itemBuilder: (_, i) {
+                          final conv = chat.conversations[i];
+                          return FadeSlide(
+                            delay: Duration(milliseconds: 50 * i),
+                            child: _ConversationTile(
+                              conversation: conv,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ChatScreen(
+                                      receiverName: conv.otherUserName,
+                                      receiverId:   conv.otherUserId,
+                                      receiverAvatar: conv.otherUserImage ?? '',
+                                      isProvider:     conv.otherUserRole == 'provider',
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: AppBottomNavBar(
+        currentIndex: 3,
+        onTap: (i) => navigateToTab(context, i),
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// MESSAGES HEADER
-// ══════════════════════════════════════════════════════════════
-class _MessagesHeader extends StatelessWidget {
+class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // HayaBook logo
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: _kPrimary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.calendar_month_rounded,
-                color: Colors.white, size: 24),
+          GlassBox(
+            blur: 10,
+            tintOpacity: 0.1,
+            radius: 30,
+            padding: const EdgeInsets.all(24),
+            child: Icon(Icons.forum_rounded, size: 54, color: AppColors.primary.withOpacity(0.3)),
           ),
-          const SizedBox(width: 12),
-          const Text(
-            'HayaBook',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: _kTextDark,
-            ),
-          ),
-          const Spacer(),
-          // Location chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.location_on, color: _kPrimary, size: 16),
-                SizedBox(width: 4),
-                Text(
-                  'Algiers, Algeria',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _kTextDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 24),
+          const Text('Inbox is empty',
+              style: TextStyle(
+                fontFamily: 'Inter', fontSize: 18,
+                fontWeight: FontWeight.w800, color: AppColors.textDark,
+                letterSpacing: -0.5,
+              )),
+          const SizedBox(height: 8),
+          const Text('Connect with providers to start a conversation',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter', fontSize: 13,
+                color: AppColors.textMuted,
+              )),
         ],
       ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SEARCH BAR
-// ══════════════════════════════════════════════════════════════
 class _SearchBar extends StatelessWidget {
   final TextEditingController controller;
   const _SearchBar({required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Messages',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
-            color: _kTextDark,
-            letterSpacing: -0.5,
-          ),
+    return GlassBox(
+      radius: 99,
+      blur: 15,
+      tintOpacity: 0.2,
+      borderOpacity: 0.3,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: Colors.white),
+        decoration: InputDecoration(
+          filled: false,
+          hintText: 'Search chats...',
+          hintStyle: TextStyle(fontFamily: 'Inter', fontSize: 14, color: Colors.white.withOpacity(0.7)),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          icon: const Icon(Icons.search_rounded, color: Colors.white, size: 20),
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: TextField(
-            controller: controller,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 15,
-              color: _kTextDark,
-            ),
-            decoration: const InputDecoration(
-              hintText: 'Search conversations...',
-              hintStyle: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                color: Color(0xFFBBBBBB),
-              ),
-              border: InputBorder.none,
-              icon: Icon(Icons.search_rounded,
-                  color: Color(0xFFBBBBBB), size: 22),
-              contentPadding: EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
-// ══════════════════════════════════════════════════════════════
-// CONVERSATION TILE
-// ══════════════════════════════════════════════════════════════
 class _ConversationTile extends StatelessWidget {
-  final Map<String, dynamic> conversation;
+  final Conversation conversation;
   final VoidCallback onTap;
 
-  const _ConversationTile({
-    required this.conversation,
-    required this.onTap,
-  });
+  const _ConversationTile({Key? key, required this.conversation, required this.onTap}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final name = conversation['name'] as String;
-    final avatar = conversation['avatar'] as String;
-    final lastMsg = conversation['lastMessage'] as String;
-    final time = conversation['time'] as String;
-    final unread = conversation['unread'] as int;
-    final isOnline = conversation['isOnline'] as bool? ?? false;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final myId = auth.userId ?? '';
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: Row(
-          children: [
-            // Avatar with online dot
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: const Color(0xFFE5E7EB),
-                  backgroundImage: avatar.isNotEmpty
-                      ? AssetImage(avatar)
-                      : null,
-                  child: avatar.isEmpty
-                      ? Text(
-                    name.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: _kPrimary,
-                    ),
-                  )
-                      : null,
-                ),
-                if (isOnline)
-                  Positioned(
-                    bottom: 2,
-                    right: 2,
-                    child: Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2.5),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 14),
+    final name     = conversation.otherUserName;
+    final avatar   = conversation.otherUserImage ?? '';
+    final lastMsg  = conversation.lastMessage.text;
+    final sentAt   = conversation.lastMessage.sentAt;
+    final time     = DateFormat('HH:mm').format(sentAt);
+    
+    final isUnread = !conversation.lastMessage.isRead && 
+                     conversation.lastMessage.receiverId == myId;
 
-            // Name + message preview
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: _kTextDark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    lastMsg,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: unread > 0
-                          ? _kTextDark
-                          : _kTextMuted,
-                      fontWeight: unread > 0
-                          ? FontWeight.w500
-                          : FontWeight.w400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ScaleTap(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFF0F2F5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10, offset: const Offset(0, 4),
+              )
+            ],
+          ),
+          child: Row(
+            children: [
+              HayaAvatar(
+                avatarUrl:    avatar,
+                size:         58,
+                borderRadius: 99,
+                isProvider:   conversation.otherUserRole == 'provider',
               ),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 14),
 
-            // Time + unread badge
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  time,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: unread > 0 ? _kPrimary : _kTextMuted,
-                  ),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(name,
+                            style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textDark,
+                                letterSpacing: -0.4)),
+                        Text(time,
+                            style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isUnread ? AppColors.primary : AppColors.textMuted)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(lastMsg,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 13,
+                                  fontWeight: isUnread ? FontWeight.w700 : FontWeight.w400,
+                                  color: isUnread ? AppColors.textDark : AppColors.textMuted)),
+                        ),
+                        if (isUnread)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            width: 10, height: 10,
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ),
-                if (unread > 0) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: const BoxDecoration(
-                      color: _kPrimary,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 22),
-                    child: Text(
-                      '$unread',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

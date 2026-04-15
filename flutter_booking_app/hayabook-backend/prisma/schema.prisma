@@ -1,0 +1,213 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String           @id @default(uuid())
+  email           String?          @unique
+  phone           String?          @unique
+  passwordHash    String
+  firstName       String?
+  lastName        String?
+  bio             String?
+  role            Role             @default(CLIENT)
+  profileImage    String?          @default("default")
+  firebaseUid     String?          @unique
+  isActive        Boolean          @default(true)
+  isVerified      Boolean          @default(false)
+  isProfileComplete Boolean        @default(false)
+  isSuspended      Boolean          @default(false)
+  suspensionReason String?
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  clientBookings  Booking[]        @relation("ClientBookings")
+  messages        Message[]        @relation("MessageSender")
+  receivedMessages Message[]       @relation("MessageReceiver")
+  providerProfile ProviderProfile?
+  reviewsGiven    Review[]         @relation("ClientReviews")
+  favorites       Favorite[]
+  notifications   Notification[]
+  supportMessages SupportMessage[]
+}
+
+model ProviderProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  businessName       String
+  category           String
+  description        String?
+  address            String?
+  latitude           Float?
+  longitude          Float?
+  documentUrl        String?
+  verificationStatus String    @default("PENDING")
+  rating             Float     @default(0.0)
+  reviewCount        Int       @default(0)
+  availability       String?   // JSON string — persisted weekly schedule
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  bookings           Booking[] @relation("ProviderBookings")
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewsReceived    Review[]  @relation("ProviderReviews")
+  services           Service[]
+  portfolio          PortfolioImage[]
+  favoritedBy        Favorite[]
+}
+
+model PortfolioImage {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  url               String
+  createdAt         DateTime        @default(now())
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  icon        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Service {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  name              String
+  description       String?
+  price             Float?
+  durationMinutes   Int?
+  isDraft           Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  bookings          Booking[]
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  options           ServiceOption[]
+}
+
+model ServiceOption {
+  id              String    @id @default(uuid())
+  serviceId       String
+  name            String
+  price           Float
+  durationMinutes Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  bookings        Booking[]
+  service         Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id                String          @id @default(uuid())
+  clientId          String
+  providerProfileId String
+  serviceId         String
+  date              DateTime
+  startTime         String
+  endTime           String
+  status            BookingStatus   @default(CONFIRMED)
+  notes             String?
+  price             Float
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  durationMinutes   Int
+  serviceOptionId   String?
+  client            User            @relation("ClientBookings", fields: [clientId], references: [id])
+  providerProfile   ProviderProfile @relation("ProviderBookings", fields: [providerProfileId], references: [id])
+  service           Service         @relation(fields: [serviceId], references: [id])
+  serviceOption     ServiceOption?  @relation(fields: [serviceOptionId], references: [id])
+  review            Review?
+}
+
+model Review {
+  id                String          @id @default(uuid())
+  bookingId         String          @unique
+  clientId          String
+  providerProfileId String
+  rating            Int
+  comment           String?
+  createdAt         DateTime        @default(now())
+  booking           Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  client            User            @relation("ClientReviews", fields: [clientId], references: [id])
+  providerProfile   ProviderProfile @relation("ProviderReviews", fields: [providerProfileId], references: [id])
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  senderId       String
+  receiverId     String?
+  conversationId String
+  content        String
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  sender         User     @relation("MessageSender",   fields: [senderId],   references: [id])
+  receiver       User?    @relation("MessageReceiver", fields: [receiverId], references: [id])
+}
+
+model Otp {
+  id         String   @id @default(uuid())
+  identifier String   @unique
+  code       String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum Role {
+  CLIENT
+  PROVIDER
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_CLIENT
+  CANCELLED_BY_PROVIDER
+  NO_SHOW
+}
+
+model Favorite {
+  id                String          @id @default(uuid())
+  userId            String
+  providerProfileId String
+  createdAt         DateTime        @default(now())
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerProfileId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // e.g., 'BOOKING_CONFIRMED', 'NEW_MESSAGE'
+  title     String
+  body      String
+  data      String?  // JSON string for additional data (bookingId, etc.)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SupportMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  subject   String
+  message   String
+  status    String   @default("OPEN") // OPEN, RESOLVED
+  reply     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
